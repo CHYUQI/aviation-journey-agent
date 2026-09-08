@@ -17,3 +17,5 @@ Thumbs.db
 # Runtime data
 backend/data/runtime/
 *.log
+
+.qa_doc03_20260908
