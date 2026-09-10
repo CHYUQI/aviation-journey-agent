@@ -1,0 +1,85 @@
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 180
+autonumber
+
+title 图2-5 系统“导航到机场”用例顺序图
+
+actor "旅客" as User
+boundary "UI\n<<boundary>>" as UI
+control "Gin 路由\n<<control>>" as Route
+control "数据感知 Agent\n<<control>>" as DataAgent
+control "行动决策 Agent\n<<control>>" as AdviceAgent
+entity "行程状态\n<<entity>>" as JourneyState
+actor "地图导航应用/浏览器" as MapApp
+
+User -> UI : 进入行程页面或刷新状态
+activate UI
+UI -> Route : GET /api/v1/journey/{id}/state
+activate Route
+Route -> JourneyState : GetSnapshot(id)
+activate JourneyState
+JourneyState --> Route : JourneySnapshot
+deactivate JourneyState
+
+alt 快照中的位置、阶段和 Advice 可用且未过期
+    Route --> UI : 位置判断、阶段、Action、dataQuality
+else 位置、阶段或 Advice 缺失、过期
+    Route -> DataAgent : BuildState(journey, previousState)
+    activate DataAgent
+    DataAgent -> DataAgent : 获取当前位置、机场位置和路线 ETA
+    DataAgent -> DataAgent : 标准化并记录 Evidence、DataQuality
+    alt 定位不可用
+        DataAgent -> DataAgent : location = unknown\n可保留最近有效位置并标记 stale
+    end
+    DataAgent --> Route : WorldState
+    deactivate DataAgent
+
+    Route -> AdviceAgent : Evaluate(WorldState)
+    activate AdviceAgent
+    AdviceAgent -> AdviceAgent : 判断旅客是否已经在机场
+
+    alt 已经在机场
+        AdviceAgent -> AdviceAgent : 不生成城市导航 Action\n生成机场内文字指引
+    else 不在机场
+        AdviceAgent -> AdviceAgent : 生成“前往机场”Action\n含高德 URI 和 fallbackUrl
+    end
+
+    AdviceAgent --> Route : Advice
+    deactivate AdviceAgent
+
+    Route -> JourneyState : SaveSnapshot(journey, WorldState, Advice)
+    activate JourneyState
+    JourneyState --> Route : 最新 JourneySnapshot
+    deactivate JourneyState
+    Route --> UI : 位置判断、阶段、Action、dataQuality
+end
+
+alt 已经在机场
+    UI --> User : 不显示城市导航，显示机场内文字指引
+else 不在机场
+    UI -> UI : 显示可选“导航到机场”按钮\n不自动打开地图
+    UI --> User : 显示导航入口，是否点击由旅客决定
+
+    opt 旅客点击“导航到机场”
+        alt 地图应用可用
+            UI -> MapApp : 打开 amapuri://route/plan
+            MapApp --> UI : 应用切换结果
+        else 未安装或打开失败
+            UI -> MapApp : 打开 fallbackUrl
+            MapApp --> UI : 浏览器打开结果
+        end
+        UI --> User : 返回后继续显示机场内文字指引
+    end
+end
+
+deactivate UI
+
+note over UI, MapApp
+  系统只负责判断并展示可选导航入口；
+  是否点击由用户决定，系统不自动跳转、不保存导航轨迹。
+end note
+@enduml

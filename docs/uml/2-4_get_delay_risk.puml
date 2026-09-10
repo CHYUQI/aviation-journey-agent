@@ -1,0 +1,59 @@
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 180
+autonumber
+
+title 图2-4 系统“获取行程延误风险”用例顺序图
+
+actor "旅客" as User
+boundary "UI\n<<boundary>>" as UI
+control "Gin 路由\n<<control>>" as Route
+control "数据感知 Agent\n<<control>>" as DataAgent
+control "行动决策 Agent\n<<control>>" as AdviceAgent
+entity "行程状态\n<<entity>>" as JourneyState
+
+User -> UI : 请求获取行程延误风险
+activate UI
+UI -> Route : GET /api/v1/journey/{id}/state
+activate Route
+Route -> JourneyState : GetSnapshot(id)
+activate JourneyState
+JourneyState --> Route : JourneySnapshot
+deactivate JourneyState
+
+alt 快照中的风险结果可用且未过期
+    Route --> UI : riskLevel、riskScore、原因、数据时间
+else 需要重新评估风险
+    alt WorldState 缺失或过期
+        Route -> DataAgent : BuildState(journey, previousState)
+        activate DataAgent
+        DataAgent -> DataAgent : 查询航班、机场、路线和位置状态
+        DataAgent -> DataAgent : 识别 unknown、stale、冲突字段
+        DataAgent -> DataAgent : 记录 Evidence 和 DataQuality
+        DataAgent --> Route : WorldState + issues
+        deactivate DataAgent
+    end
+
+    Route -> AdviceAgent : EvaluateRisk(WorldState)
+    activate AdviceAgent
+    AdviceAgent -> AdviceAgent : 计算最新出发时间和剩余 buffer
+    AdviceAgent -> AdviceAgent : 评估航班、机场、交通和旅客风险因素
+    alt 关键数据 unknown 或 stale
+        AdviceAgent -> AdviceAgent : riskLevel = unknown 或 yellow\n禁止返回绿色安全
+    end
+    AdviceAgent --> Route : riskLevel、riskScore、\n风险因素、reasoning
+    deactivate AdviceAgent
+
+    Route -> JourneyState : SaveSnapshot(journey, WorldState, Advice)
+    activate JourneyState
+    JourneyState --> Route : 最新 JourneySnapshot
+    deactivate JourneyState
+    Route --> UI : 200 + 风险结果和数据质量
+end
+
+UI --> User : 展示风险等级、风险说明、\n数据来源和更新时间
+deactivate UI
+@enduml

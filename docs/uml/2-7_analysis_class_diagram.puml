@@ -1,0 +1,80 @@
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+title 图2-7 系统分析类图
+
+package "边界类" {
+    class "UI" as UI <<boundary>> {
+        +请求信息()
+        +展示结果()
+        +展示导航入口()
+        +响应导航点击()
+    }
+}
+
+package "控制类" {
+    class "Gin 路由" as GinRoute <<control>> {
+        +处理请求()
+        +编排分析()
+        +管理快照()
+    }
+
+    class "数据感知 Agent" as DataAgent <<control>> {
+        +获取数据()
+        +分析数据()
+        +生成状态()
+    }
+
+    class "行动决策 Agent" as AdviceAgent <<control>> {
+        +分析状态()
+        +生成建议()
+        +评估风险()
+    }
+}
+
+package "实体类" {
+    class "行程状态" as JourneyState <<entity>> {
+        -行程信息
+        -世界状态
+        -行动建议
+        -数据质量
+        -生成时间
+        +读取快照()
+        +保存快照()
+    }
+}
+
+UI --> GinRoute : 请求与结果返回
+GinRoute --> DataAgent : 调用并获取状态
+GinRoute --> AdviceAgent : 调用并获取建议
+GinRoute --> JourneyState : 读取与保存快照
+
+note right of UI
+  已在机场时不显示城市导航；
+  不在机场时显示可选入口，
+  是否点击由旅客决定。
+end note
+
+note right of DataAgent
+  只获取和处理数据，
+  生成世界状态，不生成行动建议。
+end note
+
+note right of AdviceAgent
+  根据世界状态分析阶段和风险；
+  不直接调用外部数据源。
+  不在机场时才生成可选导航入口。
+end note
+
+note bottom of JourneyState
+  保存最新行程快照；
+  不负责数据获取和行动推理。
+end note
+
+note bottom of GinRoute
+  Gin 路由承担 Runtime 编排入口；
+  不把 Agent 直接连接到行程状态实体。
+end note
+@enduml

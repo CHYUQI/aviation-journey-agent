@@ -1,0 +1,268 @@
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 180
+autonumber
+
+title 图2-2 系统“获取个人行程信息数据”用例顺序图
+
+actor "旅客" as User
+boundary "UI\n<<boundary>>" as UI
+control "Gin 路由\n<<control>>" as Route
+control "数据感知 Agent\n<<control>>" as DataAgent
+entity "行程状态\n<<entity>>" as JourneyState
+
+note over Route
+  Gin 路由调用 Runtime 编排；
+  DataAgent 不直接访问 Store。
+end note
+
+User -> UI : 请求查看个人行程信息
+activate UI
+UI -> Route : GET /api/v1/journey/{id}/state
+activate Route
+Route -> JourneyState : GetSnapshot(id)
+activate JourneyState
+JourneyState --> Route : JourneySnapshot
+deactivate JourneyState
+
+alt 快照不存在、过期或 dataQuality = degraded
+    Route -> DataAgent : BuildState(journey, previousState)
+    activate DataAgent
+    DataAgent -> DataAgent : 检查缺失、过期和冲突字段
+    DataAgent -> DataAgent : 调用航班、机场、路线 Skill
+    alt 数据源超时或失败
+        DataAgent -> DataAgent : 使用最近一次有效数据\n标记 stale 或 unknown
+    end
+    DataAgent -> DataAgent : 标准化并记录 Evidence 与 DataQuality
+    DataAgent --> Route : WorldState + issues
+    deactivate DataAgent
+
+    Route -> JourneyState : SaveSnapshot(journey, state, advice)
+    activate JourneyState
+    JourneyState --> Route : 最新 JourneySnapshot
+    deactivate JourneyState
+    Route --> UI : 200/206 + 行程信息、来源、\n更新时间、降级提示
+else 快照完整且未过期
+    Route --> UI : 200 + 行程信息、来源、更新时间
+end
+
+UI --> User : 展示航班、机场、路线、位置和新鲜度
+deactivate UI
+@enduml
+
+
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 180
+autonumber
+
+title 图2-3 系统“获取行程安排建议”用例顺序图
+
+actor "旅客" as User
+boundary "UI\n<<boundary>>" as UI
+control "Gin 路由\n<<control>>" as Route
+control "数据感知 Agent\n<<control>>" as DataAgent
+control "行动决策 Agent\n<<control>>" as AdviceAgent
+entity "行程状态\n<<entity>>" as JourneyState
+
+User -> UI : 请求获取行程安排建议
+activate UI
+UI -> Route : GET /api/v1/journey/{id}/state
+activate Route
+Route -> JourneyState : GetSnapshot(id)
+activate JourneyState
+JourneyState --> Route : JourneySnapshot
+deactivate JourneyState
+
+alt 快照中的 Advice 可用且未过期
+    Route --> UI : Advice、metrics、reasoning
+else 状态或建议缺失、过期
+    alt WorldState 缺失或过期
+        Route -> DataAgent : BuildState(journey, previousState)
+        activate DataAgent
+        DataAgent -> DataAgent : 获取、校验并标准化真实数据
+        DataAgent -> DataAgent : 记录来源、有效期、置信度
+        DataAgent --> Route : WorldState + DataQuality
+        deactivate DataAgent
+    end
+
+    Route -> AdviceAgent : Evaluate(WorldState)
+    activate AdviceAgent
+    AdviceAgent -> AdviceAgent : 推导旅客所处阶段
+    AdviceAgent -> AdviceAgent : 执行值机、托运、安检、登机硬约束
+    AdviceAgent -> AdviceAgent : 计算 buffer、风险等级和行动优先级
+    alt 关键数据未知或过期
+        AdviceAgent -> AdviceAgent : riskLevel = unknown 或 yellow\nreasoning 记录数据限制
+    end
+    AdviceAgent --> Route : Advice
+    deactivate AdviceAgent
+
+    Route -> JourneyState : SaveSnapshot(journey, WorldState, Advice)
+    activate JourneyState
+    JourneyState --> Route : 最新 JourneySnapshot
+    deactivate JourneyState
+    Route --> UI : 200 + Advice、metrics、reasoning
+end
+
+UI --> User : 展示下一步行动、风险等级和依据
+deactivate UI
+
+note over AdviceAgent
+  AdviceAgent 只消费 WorldState；
+  不调用航班、机场或地图 API。
+end note
+@enduml
+
+
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 180
+autonumber
+
+title 图2-4 系统“获取行程延误风险”用例顺序图
+
+actor "旅客" as User
+boundary "UI\n<<boundary>>" as UI
+control "Gin 路由\n<<control>>" as Route
+control "数据感知 Agent\n<<control>>" as DataAgent
+control "行动决策 Agent\n<<control>>" as AdviceAgent
+entity "行程状态\n<<entity>>" as JourneyState
+
+User -> UI : 请求获取行程延误风险
+activate UI
+UI -> Route : GET /api/v1/journey/{id}/state
+activate Route
+Route -> JourneyState : GetSnapshot(id)
+activate JourneyState
+JourneyState --> Route : JourneySnapshot
+deactivate JourneyState
+
+alt 快照中的风险结果可用且未过期
+    Route --> UI : riskLevel、riskScore、原因、数据时间
+else 需要重新评估风险
+    alt WorldState 缺失或过期
+        Route -> DataAgent : BuildState(journey, previousState)
+        activate DataAgent
+        DataAgent -> DataAgent : 查询航班、机场、路线和位置状态
+        DataAgent -> DataAgent : 识别 unknown、stale、冲突字段
+        DataAgent -> DataAgent : 记录 Evidence 和 DataQuality
+        DataAgent --> Route : WorldState + issues
+        deactivate DataAgent
+    end
+
+    Route -> AdviceAgent : EvaluateRisk(WorldState)
+    activate AdviceAgent
+    AdviceAgent -> AdviceAgent : 计算最新出发时间和剩余 buffer
+    AdviceAgent -> AdviceAgent : 评估航班、机场、交通和旅客风险因素
+    alt 关键数据 unknown 或 stale
+        AdviceAgent -> AdviceAgent : riskLevel = unknown 或 yellow\n禁止返回绿色安全
+    end
+    AdviceAgent --> Route : riskLevel、riskScore、\n风险因素、reasoning
+    deactivate AdviceAgent
+
+    Route -> JourneyState : SaveSnapshot(journey, WorldState, Advice)
+    activate JourneyState
+    JourneyState --> Route : 最新 JourneySnapshot
+    deactivate JourneyState
+    Route --> UI : 200 + 风险结果和数据质量
+end
+
+UI --> User : 展示风险等级、风险说明、\n数据来源和更新时间
+deactivate UI
+@enduml
+
+
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 180
+autonumber
+
+title 图2-5 系统“导航到机场”用例顺序图
+
+actor "旅客" as User
+boundary "UI\n<<boundary>>" as UI
+control "Gin 路由\n<<control>>" as Route
+control "数据感知 Agent\n<<control>>" as DataAgent
+control "行动决策 Agent\n<<control>>" as AdviceAgent
+entity "行程状态\n<<entity>>" as JourneyState
+actor "地图导航应用/浏览器" as MapApp
+
+User -> UI : 进入行程页面或刷新状态
+activate UI
+UI -> Route : GET /api/v1/journey/{id}/state
+activate Route
+Route -> JourneyState : GetSnapshot(id)
+activate JourneyState
+JourneyState --> Route : JourneySnapshot
+deactivate JourneyState
+
+alt 快照中的位置、阶段和 Advice 可用且未过期
+    Route --> UI : 位置判断、阶段、Action、dataQuality
+else 位置、阶段或 Advice 缺失、过期
+    Route -> DataAgent : BuildState(journey, previousState)
+    activate DataAgent
+    DataAgent -> DataAgent : 获取当前位置、机场位置和路线 ETA
+    DataAgent -> DataAgent : 标准化并记录 Evidence、DataQuality
+    alt 定位不可用
+        DataAgent -> DataAgent : location = unknown\n可保留最近有效位置并标记 stale
+    end
+    DataAgent --> Route : WorldState
+    deactivate DataAgent
+
+    Route -> AdviceAgent : Evaluate(WorldState)
+    activate AdviceAgent
+    AdviceAgent -> AdviceAgent : 判断旅客是否已经在机场
+
+    alt 已经在机场
+        AdviceAgent -> AdviceAgent : 不生成城市导航 Action\n生成机场内文字指引
+    else 不在机场
+        AdviceAgent -> AdviceAgent : 生成“前往机场”Action\n含高德 URI 和 fallbackUrl
+    end
+
+    AdviceAgent --> Route : Advice
+    deactivate AdviceAgent
+
+    Route -> JourneyState : SaveSnapshot(journey, WorldState, Advice)
+    activate JourneyState
+    JourneyState --> Route : 最新 JourneySnapshot
+    deactivate JourneyState
+    Route --> UI : 位置判断、阶段、Action、dataQuality
+end
+
+alt 已经在机场
+    UI --> User : 不显示城市导航，显示机场内文字指引
+else 不在机场
+    UI -> UI : 显示可选“导航到机场”按钮\n不自动打开地图
+    UI --> User : 显示导航入口，是否点击由旅客决定
+
+    opt 旅客点击“导航到机场”
+        alt 地图应用可用
+            UI -> MapApp : 打开 amapuri://route/plan
+            MapApp --> UI : 应用切换结果
+        else 未安装或打开失败
+            UI -> MapApp : 打开 fallbackUrl
+            MapApp --> UI : 浏览器打开结果
+        end
+        UI --> User : 返回后继续显示机场内文字指引
+    end
+end
+
+deactivate UI
+
+note over UI, MapApp
+  系统只负责判断并展示可选导航入口；
+  是否点击由用户决定，系统不自动跳转、不保存导航轨迹。
+end note
+@enduml
