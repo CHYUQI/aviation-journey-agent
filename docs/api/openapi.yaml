@@ -1,0 +1,554 @@
+openapi: 3.0.3
+
+info:
+  title: 基于Agent的民航旅客智能出行系统 API
+  version: 1.0.0
+  description: |
+    v1 接口契约，唯一真源。前端只依赖本文件，不依赖后端内部结构。
+
+    核心约定：
+    - 状态字段始终输出，未知值用 null，禁止用“省略字段”表示未知。
+    - 时间统一 RFC3339 带时区，时长统一为整数分钟。
+    - 时间由服务端决定，客户端不上报当前时间。
+    - 分析是异步的：POST 返回 202，结果通过 /state 或 SSE 获取。
+    - 枚举取值见 components/schemas，前端对每个枚举都必须有兜底分支。
+
+servers:
+  - url: http://localhost:8080
+    description: 真实链路（Gin + 两个 Agent）
+  - url: http://localhost:8081
+    description: 前端联调 mock（cmd/mockserver）
+
+tags:
+  - name: Journey
+    description: 行程创建、位置与阶段上报、状态查询与实时推送
+
+paths:
+
+  /journey:
+    post:
+      tags: [Journey]
+      summary: 创建行程
+      description: |
+        创建行程并触发一次分析。分析涉及大模型与外部数据技能，耗时较长，因此不阻塞等待。
+        客户端不上报当前时间，服务端以收到请求的时刻为准。
+      operationId: createJourney
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJourneyRequest'
+            example:
+              flights:
+                - number: CA1234
+                  date: '2026-09-11'
+                  from: PVG
+                  to: PEK
+              hasBaggage: true
+      responses:
+        '202':
+          description: 已受理，分析进行中
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /journey/{id}/location:
+    post:
+      tags: [Journey]
+      summary: 上报位置或手动确认阶段
+      description: |
+        两种用法，至少提供一种：
+
+        1. 上报定位坐标：传 lat + lng，必须成对出现。
+           上报坐标会清除此前手动确认的阶段，以定位为准。
+
+        2. 手动确认阶段：传 stage，不传坐标。
+           用于定位不可用或机场内定位不准时，由旅客自己确认所处阶段。
+           手动确认后阶段保持不变，直到下一次上报坐标。
+
+        两种方式都会触发重算，并在完成后立即通过 SSE 推送新快照。
+      operationId: updateLocation
+      parameters:
+        - $ref: '#/components/parameters/JourneyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLocationRequest'
+            examples:
+              gps:
+                summary: 上报定位坐标
+                value: { lat: 31.2304, lng: 121.4737 }
+              manual:
+                summary: 手动确认在值机
+                value: { stage: check_in }
+              both:
+                summary: 坐标 + 手动阶段
+                value: { lat: 31.2304, lng: 121.4737, stage: security }
+      responses:
+        '202':
+          description: 已受理，正在重算
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /journey/{id}/state:
+    get:
+      tags: [Journey]
+      summary: 查询当前快照
+      description: 前端的唯一状态来源。返回结构与 SSE 推送的 data 完全一致。
+      operationId: getJourneyState
+      parameters:
+        - $ref: '#/components/parameters/JourneyId'
+      responses:
+        '200':
+          description: 当前快照，status 可能为 processing / ready / failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneySnapshot'
+              examples:
+                ready:
+                  $ref: '#/components/examples/ReadySnapshot'
+                processing:
+                  $ref: '#/components/examples/ProcessingSnapshot'
+                failed:
+                  $ref: '#/components/examples/FailedSnapshot'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /journey/{id}/stream:
+    get:
+      tags: [Journey]
+      summary: 订阅行程快照（SSE）
+      description: |
+        推送约定：
+        1. 连接建立后立即推送一条 event: snapshot。
+        2. 快照变化时推送 event: snapshot，data 结构与 /state 完全一致。
+        3. 位置或阶段更新并重算完成后立即推送，不等下一个周期。
+        4. 无变化时每 15 秒推送 event: heartbeat。
+        5. 事件名固定为 snapshot / heartbeat，新增事件名属于破坏性变更。
+      operationId: streamJourney
+      parameters:
+        - $ref: '#/components/parameters/JourneyId'
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                retry: 5000
+
+                event: snapshot
+                data: {"status":"processing","journey":{...},"state":{...},"advice":{...}}
+
+                event: heartbeat
+                data: {"at":"2026-09-11T12:36:15+08:00"}
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+
+  parameters:
+    JourneyId:
+      name: id
+      in: path
+      required: true
+      description: 行程 ID，不透明字符串，客户端不得解析其结构
+      schema:
+        type: string
+        example: j_7f3a91
+
+  responses:
+    BadRequest:
+      description: 请求参数不合法
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: 行程不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServerError:
+      description: 服务端错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  examples:
+    ReadySnapshot:
+      summary: 分析完成
+      value:
+        status: ready
+        journey:
+          id: j_7f3a91
+          flights:
+            - { number: CA1234, date: '2026-09-11', from: PVG, to: PEK }
+          hasBaggage: true
+        state:
+          flightStatus: on_time
+          gate: B27
+          timeline:
+            - { label: 开始登机, time: '2026-09-11T14:20:00+08:00' }
+            - { label: 登机口关闭, time: '2026-09-11T14:45:00+08:00' }
+            - { label: 起飞, time: '2026-09-11T15:00:00+08:00' }
+          etaMin: 52
+          traffic: heavy
+          guide:
+            - T2 入口 → 值机柜台，约 4 分钟
+            - 值机柜台 → 安检，约 6 分钟
+            - 安检 → B27 登机口，约 14 分钟
+          quality: degraded
+          updatedAt: '2026-09-11T12:36:00+08:00'
+        advice:
+          stage: en_route
+          risk: yellow
+          alert: 安检排队上升到 45 分钟，缓冲可能不足
+          cards:
+            - { label: 预计到达机场, value: 52 分钟 }
+            - { label: 安检排队, value: 18 分钟 }
+            - { label: 剩余缓冲, value: 18 分钟 }
+            - { label: 最晚出发, value: '13:28' }
+          actions:
+            - id: leave_now
+              title: 尽快出发
+              detail: 当前路况拥堵，预计 52 分钟到达机场
+              nav:
+                app: 'amapuri://route/plan?dlat=31.1443&dlon=121.8083&dname=PVG%20T2'
+                web: 'https://uri.amap.com/navigation?to=31.1443,121.8083,PVG%20T2&mode=car'
+            - id: contact_airline
+              title: 联系航空公司确认
+              detail: 如果缓冲继续下降，建议提前咨询改签政策
+              nav: null
+          reasons:
+            - 航班数据更新于 12:35，来源 flight_status
+            - 安检排队为估计值，置信度低
+
+    ProcessingSnapshot:
+      summary: 分析中
+      value:
+        status: processing
+        journey:
+          id: j_7f3a91
+          flights:
+            - { number: CA1234, date: '2026-09-11', from: PVG, to: PEK }
+          hasBaggage: true
+        state:
+          flightStatus: unknown
+          gate: null
+          timeline: []
+          etaMin: null
+          traffic: null
+          guide: []
+          quality: unknown
+          updatedAt: '2026-09-11T08:30:01+08:00'
+        advice:
+          stage: unknown
+          risk: unknown
+          alert: null
+          cards: []
+          actions: []
+          reasons: [分析进行中，暂无建议]
+
+    FailedSnapshot:
+      summary: 分析失败
+      value:
+        status: failed
+        journey:
+          id: j_7f3a91
+          flights:
+            - { number: CA1234, date: '2026-09-11', from: PVG, to: PEK }
+          hasBaggage: true
+        state:
+          flightStatus: unknown
+          gate: null
+          timeline: []
+          etaMin: null
+          traffic: null
+          guide: []
+          quality: unknown
+          updatedAt: '2026-09-11T08:30:06+08:00'
+        advice:
+          stage: unknown
+          risk: unknown
+          alert: null
+          cards: []
+          actions: []
+          reasons: []
+        error: 行动决策 Agent 调用失败
+
+  schemas:
+
+    CreateJourneyRequest:
+      type: object
+      required: [flights, hasBaggage]
+      properties:
+        flights:
+          type: array
+          minItems: 1
+          description: 按行程顺序排列。v1 只处理第一个航段
+          items:
+            $ref: '#/components/schemas/Flight'
+        hasBaggage:
+          type: boolean
+          description: 是否携带托运行李
+
+    Flight:
+      type: object
+      required: [number, date, from, to]
+      properties:
+        number:
+          type: string
+          description: 航班号，统一大写不含空格
+          example: CA1234
+        date:
+          type: string
+          format: date
+          example: '2026-09-11'
+        from:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: 出发机场 IATA 三字码
+          example: PVG
+        to:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: 到达机场 IATA 三字码
+          example: PEK
+
+    UpdateLocationRequest:
+      type: object
+      description: |
+        至少提供 lat + lng 或 stage 之一，否则返回 400。
+        lat 与 lng 必须成对出现。
+      properties:
+        lat:
+          type: number
+          format: double
+          nullable: true
+        lng:
+          type: number
+          format: double
+          nullable: true
+        stage:
+          allOf:
+            - $ref: '#/components/schemas/ManualStage'
+          nullable: true
+          description: 旅客手动确认的当前阶段；上报坐标时会自动清除
+
+    AnalysisAccepted:
+      type: object
+      required: [journeyId, status]
+      properties:
+        journeyId:
+          type: string
+        status:
+          $ref: '#/components/schemas/AnalysisStatus'
+
+    JourneySnapshot:
+      type: object
+      description: 前端唯一数据源。所有字段始终输出，未知值为 null
+      required: [status, journey, state, advice]
+      properties:
+        status:
+          $ref: '#/components/schemas/AnalysisStatus'
+        journey:
+          $ref: '#/components/schemas/Journey'
+        state:
+          $ref: '#/components/schemas/State'
+        advice:
+          $ref: '#/components/schemas/Advice'
+        error:
+          type: string
+          nullable: true
+          description: 仅当 status = failed 时返回，面向旅客展示的一句话
+
+    Journey:
+      type: object
+      required: [id, flights, hasBaggage]
+      properties:
+        id:
+          type: string
+        flights:
+          type: array
+          items:
+            $ref: '#/components/schemas/Flight'
+        hasBaggage:
+          type: boolean
+
+    State:
+      type: object
+      description: DataAgent 输出。只包含有依据的数据，没有依据的字段一律为 null
+      required:
+        [flightStatus, gate, timeline, etaMin, traffic, guide, quality, updatedAt]
+      properties:
+        flightStatus:
+          $ref: '#/components/schemas/FlightStatus'
+        gate:
+          type: string
+          nullable: true
+        timeline:
+          type: array
+          description: 时间轴节点，后端决定展示哪几个，已按时间升序排列
+          items:
+            $ref: '#/components/schemas/TimelineNode'
+        etaMin:
+          type: integer
+          nullable: true
+          description: 当前位置到机场的预计耗时（分钟）
+        traffic:
+          allOf:
+            - $ref: '#/components/schemas/Traffic'
+          nullable: true
+        guide:
+          type: array
+          description: 机场内逐段文字指引，前端按数组顺序展示
+          items:
+            type: string
+        quality:
+          $ref: '#/components/schemas/Quality'
+        updatedAt:
+          type: string
+          format: date-time
+          description: 快照生成时间。前端可用它校正本地时钟后再做倒计时
+
+    TimelineNode:
+      type: object
+      required: [label, time]
+      properties:
+        label:
+          type: string
+          description: 节点名称，由后端生成
+          example: 开始登机
+        time:
+          type: string
+          format: date-time
+          description: 节点时间，RFC3339，供前端做倒计时
+
+    Advice:
+      type: object
+      description: AdviceAgent 输出。只做判断与呈现，不重复 State 里的原始状态
+      required: [stage, risk, alert, cards, actions, reasons]
+      properties:
+        stage:
+          $ref: '#/components/schemas/Stage'
+        risk:
+          $ref: '#/components/schemas/Risk'
+        alert:
+          type: string
+          nullable: true
+          description: 当前最该提醒旅客的一句话。null 表示无需提醒
+        cards:
+          type: array
+          description: 指标卡，是所有展示数字的唯一来源。value 已格式化
+          items:
+            $ref: '#/components/schemas/Card'
+        actions:
+          type: array
+          description: 行动卡片，已按优先级排序
+          items:
+            $ref: '#/components/schemas/Action'
+        reasons:
+          type: array
+          description: 判断依据，含数据来源与时间
+          items:
+            type: string
+
+    Card:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+          example: 剩余缓冲
+        value:
+          type: string
+          description: 已格式化的展示值，例如 "18 分钟"、"13:28"
+          example: 18 分钟
+
+    Action:
+      type: object
+      required: [id, title, detail]
+      properties:
+        id:
+          type: string
+          description: 稳定标识，如 leave_now
+          example: leave_now
+        title:
+          type: string
+          example: 尽快出发
+        detail:
+          type: string
+          example: 当前路况拥堵，预计 52 分钟到达机场
+        nav:
+          allOf:
+            - $ref: '#/components/schemas/Nav'
+          nullable: true
+          description: 有值时才渲染导航按钮
+
+    Nav:
+      type: object
+      required: [app, web]
+      properties:
+        app:
+          type: string
+          description: 应用内跳转地址，优先使用
+        web:
+          type: string
+          description: 应用未安装时的网页兜底地址
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: 面向旅客或开发者的一句话，前端直接展示
+
+    AnalysisStatus:
+      type: string
+      enum: [processing, ready, failed]
+
+    Stage:
+      type: string
+      enum: [unknown, en_route, at_airport, check_in, security, waiting, boarding, departed, disrupted]
+
+    ManualStage:
+      type: string
+      description: 旅客可手动确认的阶段，是 Stage 的子集
+      enum: [en_route, at_airport, check_in, security, waiting, boarding]
+
+    Risk:
+      type: string
+      enum: [unknown, green, yellow, orange, red]
+      description: unknown 表示关键数据缺失，前端不得渲染成绿色
+
+    Quality:
+      type: string
+      enum: [complete, degraded, unknown]
+
+    Traffic:
+      type: string
+      enum: [unknown, light, moderate, heavy, severe]
+
+    FlightStatus:
+      type: string
+      enum: [unknown, scheduled, on_time, delayed, boarding, departed, cancelled, diverted]

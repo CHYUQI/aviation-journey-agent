@@ -33,6 +33,33 @@ npm run dev
 
 默认监听 `http://localhost:5173`，开发服务器将 `/api` 代理到后端。
 
-详细实施顺序和接口契约见 [projectplan.md](./projectplan.md)。
+## 接口契约
+
+前后端并行开发以契约为准，不要互相读代码：
+
+- `docs/api/openapi.yaml` — 机器可读的唯一真源
+- `docs/api/contract.md` — 人工阅读版（枚举、空值语义、SSE 约定、变更流程）
+
+契约变更后重新生成前端类型：
+
+```powershell
+cd frontend
+npm run gen:api
+```
+
+前端不依赖后端时，用 mock 服务开发：
+
+```powershell
+cd backend
+go run ./cmd/mockserver      # :8081
+```
+
+```powershell
+cd frontend
+$env:MOCK_API=1; npm run dev
+```
+
+详细实施顺序见 [projectplan.md](./projectplan.md)。
+
 
 

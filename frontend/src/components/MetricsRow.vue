@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import type { AdviceMetric } from '../types/domain'
-defineProps<{ metrics: AdviceMetric[] }>()
+import type { Card } from '../types'
+
+defineProps<{ cards: Card[] }>()
 </script>
+
 <template>
-  <section class="metrics-row"><article v-for="metric in metrics" :key="metric.key" class="metric-card"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong><small>{{ metric.unit }}</small></article></section>
+  <section class="metrics-row">
+    <article v-for="card in cards" :key="card.label" class="metric-card">
+      <span>{{ card.label }}</span>
+      <strong>{{ card.value }}</strong>
+    </article>
+    <p v-if="cards.length === 0" class="muted">暂无指标。定位或数据到位后会自动出现。</p>
+  </section>
 </template>
