@@ -14,8 +14,12 @@ frontend/.vite/
 .DS_Store
 Thumbs.db
 
+# 环境变量：含模型 API Key，禁止提交
+.env
+.env.local
+backend/.env
+backend/.env.local
+
 # Runtime data
 backend/data/runtime/
 *.log
-
-.qa_doc03_20260908
