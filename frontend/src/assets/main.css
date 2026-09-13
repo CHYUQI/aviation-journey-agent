@@ -10,14 +10,19 @@ h1 { font-size: clamp(38px, 7vw, 72px); letter-spacing: -.06em; }
 .hero p { color: #63738b; font-size: 17px; }
 .status-bar, .metrics-row, .content-grid { display: grid; gap: 14px; }
 .status-bar { grid-template-columns: repeat(3, 1fr); background: #162a4a; color: white; border-radius: 20px; padding: 22px; }
-.status-bar[data-risk='red'] { background: #8c2833; }
+/* 契约 7.4：risk 五色映射。unknown 绝不允许渲染成绿色 */
+.status-bar[data-risk='green'] { background: #1d5c43; }
 .status-bar[data-risk='yellow'] { background: #88651d; }
+.status-bar[data-risk='orange'] { background: #a3580d; }
+.status-bar[data-risk='red'] { background: #8c2833; }
+.status-bar[data-risk='unknown'] { background: #475569; }
 .status-bar strong { display: block; font-size: 22px; margin-top: 7px; }
 .metrics-row { grid-template-columns: repeat(3, 1fr); margin: 14px 0; }
 .metric-card, .panel, .empty-state { background: white; border-radius: 18px; padding: 22px; box-shadow: 0 10px 30px rgba(42, 67, 101, .06); }
 .metric-card span, .metric-card small { display: block; color: #73839a; }
 .metric-card strong { display: block; font-size: 26px; margin-top: 8px; }
 .content-grid { grid-template-columns: 1fr 1fr; }
+.side-stack { display: grid; gap: 14px; align-content: start; }
 .panel-heading { display: flex; justify-content: space-between; gap: 15px; align-items: baseline; margin-bottom: 22px; }
 .panel-heading span, .muted, .freshness-bar { color: #78869b; font-size: 13px; }
 .timeline { list-style: none; padding: 0; margin: 0; }
@@ -38,4 +43,43 @@ h1 { font-size: clamp(38px, 7vw, 72px); letter-spacing: -.06em; }
 .alert-banner { border-radius: 14px; padding: 14px 18px; margin: 14px 0; background: #fff4d6; color: #6b4e00; line-height: 1.6; }
 .alert-banner[data-risk='red'] { background: #fbe0e3; color: #8c2833; }
 .alert-banner[data-risk='orange'] { background: #ffe9d6; color: #8a4b12; }
+.alert-banner[data-risk='green'] { background: #e2f3e4; color: #1d5c43; }
 .alert-banner[data-risk='unknown'] { background: #eef1f5; color: #5a6675; }
+
+/* ---- 创建行程表单 ---- */
+.journey-form form { display: grid; gap: 16px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.form-grid label { display: grid; gap: 6px; font-size: 13px; color: #5a6b82; }
+.form-grid input, .journey-form input[type='text'] { border: 1px solid #dbe3ee; border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 15px; color: #15233b; background: #fbfcfe; }
+.form-grid input:focus { outline: 2px solid #2166f3; border-color: transparent; }
+.baggage-check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: #4a5a70; }
+.form-error { color: #a83a3c; font-size: 13px; margin: 0; }
+.primary { border: 0; border-radius: 999px; background: #2166f3; color: white; padding: 12px 22px; cursor: pointer; font-weight: 600; justify-self: start; }
+.primary:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ---- failed 横幅 ---- */
+.error-banner { display: flex; justify-content: space-between; gap: 16px; align-items: center; border-radius: 14px; padding: 14px 18px; margin: 14px 0; background: #fbe0e3; color: #8c2833; line-height: 1.6; }
+.error-banner p { margin: 0; }
+.error-banner .primary { background: #8c2833; }
+
+/* ---- processing 骨架屏（契约 7.2：不显示风险颜色、不渲染行动卡片）---- */
+.skeleton { display: grid; gap: 14px; margin-top: 14px; }
+.skeleton-card { background: linear-gradient(100deg, #edf1f6 40%, #f6f8fb 50%, #edf1f6 60%); background-size: 200% 100%; animation: skeleton-shimmer 1.4s infinite; border-radius: 18px; height: 96px; }
+@keyframes skeleton-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+/* ---- toast（契约 7.3：alert 变化提醒）---- */
+.toast-host { position: fixed; top: 20px; right: 20px; display: grid; gap: 10px; z-index: 50; max-width: min(360px, calc(100vw - 40px)); }
+.toast { border-radius: 12px; padding: 12px 16px; font-size: 14px; line-height: 1.5; box-shadow: 0 10px 30px rgba(42, 67, 101, .15); }
+.toast[data-type='warning'] { background: #fff4d6; color: #6b4e00; border: 1px solid #f3dd9a; }
+.toast[data-type='error'] { background: #fbe0e3; color: #8c2833; border: 1px solid #f0b9bd; }
+
+/* ---- 手动确认阶段（契约 7.6）---- */
+.stage-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.stage-options button { border: 1px solid #dbe3ee; border-radius: 999px; background: #fbfcfe; color: #2c3e56; padding: 9px 16px; cursor: pointer; font-size: 14px; }
+.stage-options button:hover:not(:disabled) { border-color: #2166f3; color: #2166f3; }
+.stage-options button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ---- 数据质量降级提示（契约 7.5）---- */
+.quality-warning { border-radius: 12px; padding: 10px 14px; margin: 0 4px 14px; background: #fff4d6; color: #6b4e00; }
+.quality-warning-title { margin: 0 0 6px; font-weight: 700; font-size: 13px; }
+.quality-reasons { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }

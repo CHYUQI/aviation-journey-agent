@@ -6,6 +6,7 @@ const props = defineProps<{
   timeline: TimelineNode[]
   guide: string[]
   stage: Stage
+  updatedAt: string
 }>()
 
 function formatTime(iso: string) {
@@ -15,9 +16,11 @@ function formatTime(iso: string) {
     : d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-// 高亮下一个尚未到达的节点。纯时间比较，不参与任何风险判断
+// 契约 1.4：用服务端快照时间校正本地时钟偏移，再比较节点时间。
+// 展示逻辑：高亮下一个尚未到达的节点，不参与任何风险判断。
 const activeIndex = computed(() => {
-  const now = Date.now()
+  const offset = new Date(props.updatedAt).getTime() - Date.now()
+  const now = Date.now() + offset
   const i = props.timeline.findIndex((n) => new Date(n.time).getTime() > now)
   return i === -1 ? props.timeline.length : i
 })
