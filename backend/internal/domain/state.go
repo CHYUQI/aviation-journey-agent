@@ -1,74 +1,37 @@
 package domain
 
-import "time"
-
-type WorldState struct {
-	Flight      FlightState    `json:"flight"`
-	Airport     AirportState   `json:"airport"`
-	Travel      TravelState    `json:"travel"`
-	Passenger   PassengerState `json:"passenger"`
-	Derived     DerivedState   `json:"derived"`
-	Evidence    []Evidence     `json:"evidence"`
-	DataQuality DataQuality    `json:"dataQuality"`
-	GeneratedAt time.Time      `json:"generatedAt"`
+// State 是 DataAgent 的输出。对应契约 schemas.State。
+//
+// 硬性约定：
+//   - 只包含有依据的数据。没有依据的字段一律为 nil，禁止用默认值填充。
+//   - 数组无内容时返回空切片，序列化后是 []，不是 null。
+//   - 时间字段是 RFC3339 带时区字符串，时长是整数分钟。
+//   - 所有可空字段都不加 omitempty，未知值要以 null 的形式出现在 JSON 里。
+type State struct {
+	FlightStatus string         `json:"flightStatus"`
+	Gate         *string        `json:"gate"`
+	Timeline     []TimelineNode `json:"timeline"`
+	ETAMin       *int           `json:"etaMin"`
+	Traffic      *string        `json:"traffic"`
+	Guide        []string       `json:"guide"`
+	Quality      string         `json:"quality"`
+	UpdatedAt    string         `json:"updatedAt"`
 }
 
-type FlightState struct {
-	Number             string    `json:"number"`
-	Status             string    `json:"status"`
-	ScheduledDeparture time.Time `json:"scheduledDeparture,omitempty"`
-	EstimatedDeparture time.Time `json:"estimatedDeparture,omitempty"`
-	BoardingTime       time.Time `json:"boardingTime,omitempty"`
-	GateCloseTime      time.Time `json:"gateCloseTime,omitempty"`
-	Gate               string    `json:"gate,omitempty"`
+// TimelineNode 是时间轴上的一个节点，按时间升序排列。
+// Time 用 RFC3339 而不是格式化后的 "14:20"，因为前端要用它做倒计时。
+type TimelineNode struct {
+	Label string `json:"label"`
+	Time  string `json:"time"`
 }
 
-type AirportState struct {
-	Code            string  `json:"code"`
-	Terminal        string  `json:"terminal"`
-	SecurityWaitMin int     `json:"securityWaitMin,omitempty"`
-	CheckInQueueMin int     `json:"checkInQueueMin,omitempty"`
-	WalkToGateMin   int     `json:"walkToGateMin,omitempty"`
-	InternalGuide   []Guide `json:"internalGuide,omitempty"`
-}
-
-type Guide struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-	Min  int    `json:"min"`
-	Text string `json:"text"`
-}
-
-type TravelState struct {
-	DistanceKm float64   `json:"distanceKm,omitempty"`
-	ETAMin     int       `json:"etaMin,omitempty"`
-	Traffic    string    `json:"traffic,omitempty"`
-	Location   *Location `json:"location,omitempty"`
-}
-
-type PassengerState struct {
-	HasBaggage bool      `json:"hasBaggage"`
-	Location   *Location `json:"location,omitempty"`
-}
-
-type DerivedState struct {
-	CheckInDeadline    time.Time `json:"checkInDeadline,omitempty"`
-	BagDropDeadline    time.Time `json:"bagDropDeadline,omitempty"`
-	LatestDeparture    time.Time `json:"latestDeparture,omitempty"`
-	AirportInternalMin int       `json:"airportInternalMin,omitempty"`
-	BufferMin          int       `json:"bufferMin,omitempty"`
-}
-
-type Evidence struct {
-	Field      string    `json:"field"`
-	Source     string    `json:"source"`
-	ObservedAt time.Time `json:"observedAt"`
-	ExpiresAt  time.Time `json:"expiresAt,omitempty"`
-	Confidence string    `json:"confidence"`
-	Method     string    `json:"method,omitempty"`
-}
-
-type DataQuality struct {
-	Status string   `json:"status"`
-	Issues []string `json:"issues,omitempty"`
+// NewState 返回一份"全部未知"的状态，作为分析起点。
+// 可空字段保持 nil，这样序列化时输出 null 而不是被省略。
+func NewState() State {
+	return State{
+		FlightStatus: FlightStatusUnknown,
+		Timeline:     []TimelineNode{},
+		Guide:        []string{},
+		Quality:      QualityUnknown,
+	}
 }

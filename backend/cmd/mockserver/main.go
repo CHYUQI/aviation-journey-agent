@@ -4,6 +4,8 @@
 // 只按 docs/api/openapi.yaml 的结构返回固定夹具，用来验证前端在
 // processing / ready / failed 三态下的渲染、SSE 推送，以及手动确认阶段的交互。
 //
+// 结构与真服务共用 internal/domain，保证两边不可能对不上。
+//
 //	go run ./cmd/mockserver      # 监听 :8081
 //
 // 前端联调：MOCK_API=1 npm run dev
@@ -19,6 +21,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"aviation-journey-agent/backend/internal/domain"
 )
 
 const (
@@ -28,77 +32,10 @@ const (
 	heartbeat    = 15 * time.Second // 无变化时的心跳间隔
 )
 
-// ---------- 与 openapi.yaml 对齐的结构。可空字段用指针，未知为 null ----------
-
-type Flight struct {
-	Number string `json:"number"`
-	Date   string `json:"date"`
-	From   string `json:"from"`
-	To     string `json:"to"`
-}
-
-type Journey struct {
-	ID         string   `json:"id"`
-	Flights    []Flight `json:"flights"`
-	HasBaggage bool     `json:"hasBaggage"`
-}
-
-type TimelineNode struct {
-	Label string `json:"label"`
-	Time  string `json:"time"`
-}
-
-type State struct {
-	FlightStatus string         `json:"flightStatus"`
-	Gate         *string        `json:"gate"`
-	Timeline     []TimelineNode `json:"timeline"`
-	ETAMin       *int           `json:"etaMin"`
-	Traffic      *string        `json:"traffic"`
-	Guide        []string       `json:"guide"`
-	Quality      string         `json:"quality"`
-	UpdatedAt    string         `json:"updatedAt"`
-}
-
-type Card struct {
-	Label string `json:"label"`
-	Value string `json:"value"`
-}
-
-type Nav struct {
-	App string `json:"app"`
-	Web string `json:"web"`
-}
-
-type Action struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Detail string `json:"detail"`
-	Nav    *Nav   `json:"nav"`
-}
-
-type Advice struct {
-	Stage   string   `json:"stage"`
-	Risk    string   `json:"risk"`
-	Alert   *string  `json:"alert"`
-	Cards   []Card   `json:"cards"`
-	Actions []Action `json:"actions"`
-	Reasons []string `json:"reasons"`
-}
-
-type Snapshot struct {
-	Status  string  `json:"status"`
-	Journey Journey `json:"journey"`
-	State   State   `json:"state"`
-	Advice  Advice  `json:"advice"`
-	Error   *string `json:"error,omitempty"`
-}
-
-// ---------- 存储 ----------
-
+// record 是 mock 的内部状态：当前快照 + 契约之外的位置/阶段信息。
 type record struct {
-	snapshot    Snapshot
-	manualStage string // 旅客手动确认的阶段，空字符串表示未确认
-	hasLocation bool   // 是否收到过定位坐标
+	snapshot domain.JourneySnapshot
+	progress domain.JourneyProgress
 }
 
 var (
@@ -119,37 +56,32 @@ func load(id string) (*record, bool) {
 	return rec, ok
 }
 
-func now() string { return time.Now().Format(time.RFC3339) }
-
+func now() string       { return time.Now().Format(time.RFC3339) }
 func ptr[T any](v T) *T { return &v }
 
 // ---------- handler ----------
 
 func create(c *gin.Context) {
-	var req struct {
-		Flights    []Flight `json:"flights"`
-		HasBaggage bool     `json:"hasBaggage"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || len(req.Flights) == 0 {
-		badRequest(c, "flights 至少需要一个航段")
+	var req domain.CreateJourneyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badRequest(c, "请求体格式错误")
 		return
 	}
-	f := req.Flights[0]
-	if f.Number == "" || f.Date == "" || f.From == "" || f.To == "" {
-		badRequest(c, "航班号、日期、出发机场、到达机场均为必填项")
+	if err := req.Validate(); err != nil {
+		badRequest(c, err.Error())
 		return
 	}
 
-	journey := Journey{
-		ID:         "j_" + strings.ToLower(f.Number),
+	journey := domain.Journey{
+		ID:         "j_" + strings.ToLower(req.Flights[0].Number),
 		Flights:    req.Flights,
 		HasBaggage: req.HasBaggage,
 	}
 
 	put(journey.ID, &record{snapshot: processingSnapshot(journey)})
-	go finish(journey, "", false)
+	go finish(journey, domain.JourneyProgress{})
 
-	c.JSON(http.StatusAccepted, gin.H{"journeyId": journey.ID, "status": "processing"})
+	c.JSON(http.StatusAccepted, gin.H{"journeyId": journey.ID, "status": domain.StatusProcessing})
 }
 
 // updateLocation 同时支持上报定位坐标与手动确认阶段。
@@ -161,49 +93,30 @@ func updateLocation(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Lat   *float64 `json:"lat"`
-		Lng   *float64 `json:"lng"`
-		Stage *string  `json:"stage"`
-	}
+	var req domain.UpdateLocationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		badRequest(c, "请求体格式错误")
 		return
 	}
-
-	if (req.Lat == nil) != (req.Lng == nil) {
-		badRequest(c, "lat 与 lng 必须成对出现")
-		return
-	}
-	hasCoord := req.Lat != nil && req.Lng != nil
-	if !hasCoord && req.Stage == nil {
-		badRequest(c, "至少提供 lat+lng 或 stage 之一")
-		return
-	}
-	if req.Stage != nil && !validManualStage(*req.Stage) {
-		badRequest(c, "stage 取值不合法")
+	if err := req.Validate(); err != nil {
+		badRequest(c, err.Error())
 		return
 	}
 
-	manual := rec.manualStage
-	if hasCoord {
-		manual = "" // 上报坐标后以定位为准，清除手动确认
+	progress := rec.progress
+	if req.HasCoordinate() {
+		progress.Location = &domain.Coordinate{Lat: *req.Lat, Lng: *req.Lng}
+		progress.ManualStage = "" // 上报坐标后以定位为准
 	}
 	if req.Stage != nil {
-		manual = *req.Stage
+		progress.ManualStage = *req.Stage
 	}
 
-	hasLoc := rec.hasLocation || hasCoord
 	journey := rec.snapshot.Journey
+	put(id, &record{snapshot: processingSnapshot(journey), progress: progress})
+	go finish(journey, progress)
 
-	put(id, &record{
-		snapshot:    processingSnapshot(journey),
-		manualStage: manual,
-		hasLocation: hasLoc,
-	})
-	go finish(journey, manual, hasLoc)
-
-	c.JSON(http.StatusAccepted, gin.H{"journeyId": id, "status": "processing"})
+	c.JSON(http.StatusAccepted, gin.H{"journeyId": id, "status": domain.StatusProcessing})
 }
 
 func getState(c *gin.Context) {
@@ -259,166 +172,148 @@ func stream(c *gin.Context) {
 	}
 }
 
-func sendSnapshot(c *gin.Context, s Snapshot) {
-	payload, _ := json.Marshal(s)
+func sendSnapshot(c *gin.Context, snapshot domain.JourneySnapshot) {
+	payload, _ := json.Marshal(snapshot)
 	fmt.Fprintf(c.Writer, "event: snapshot\ndata: %s\n\n", payload)
 	c.Writer.Flush()
 }
 
 // ---------- 夹具 ----------
 
-func finish(journey Journey, manual string, hasLocation bool) {
+// finish 延迟一段时间后把快照从 processing 切成 ready 或 failed，
+// 让前端能同时验证加载态、完成态和失败态。
+func finish(journey domain.Journey, progress domain.JourneyProgress) {
 	time.Sleep(analyzeDelay)
 
-	// 用航班号切换场景，方便前端一次性验证三种状态
+	var snapshot domain.JourneySnapshot
 	switch strings.ToUpper(journey.Flights[0].Number) {
 	case "FAIL":
-		put(journey.ID, &record{
-			snapshot:    failedSnapshot(journey),
-			manualStage: manual,
-			hasLocation: hasLocation,
-		})
+		msg := "行动决策 Agent 调用失败"
+		snapshot = domain.JourneySnapshot{
+			Status:  domain.StatusFailed,
+			Journey: journey,
+			State:   stampedState(domain.NewState()),
+			Advice:  domain.NewAdvice(),
+			Error:   &msg,
+		}
 	case "MU9999":
-		put(journey.ID, &record{
-			snapshot:    readySnapshot(journey, "orange", "delayed", manual, hasLocation, true),
-			manualStage: manual,
-			hasLocation: hasLocation,
-		})
+		snapshot = readySnapshot(journey, progress, domain.RiskOrange, domain.FlightStatusDelayed, true)
 	default:
-		put(journey.ID, &record{
-			snapshot:    readySnapshot(journey, "yellow", "on_time", manual, hasLocation, false),
-			manualStage: manual,
-			hasLocation: hasLocation,
-		})
+		snapshot = readySnapshot(journey, progress, domain.RiskYellow, domain.FlightStatusOnTime, false)
 	}
+
+	put(journey.ID, &record{snapshot: snapshot, progress: progress})
 }
 
-func processingSnapshot(journey Journey) Snapshot {
-	return Snapshot{
-		Status:  "processing",
+func processingSnapshot(journey domain.Journey) domain.JourneySnapshot {
+	advice := domain.NewAdvice()
+	advice.Reasons = []string{"分析进行中，暂无建议"}
+
+	return domain.JourneySnapshot{
+		Status:  domain.StatusProcessing,
 		Journey: journey,
-		State: State{
-			FlightStatus: "unknown",
-			Gate:         nil,
-			Timeline:     []TimelineNode{},
-			ETAMin:       nil,
-			Traffic:      nil,
-			Guide:        []string{},
-			Quality:      "unknown",
-			UpdatedAt:    now(),
-		},
-		Advice: Advice{
-			Stage:   "unknown",
-			Risk:    "unknown",
-			Alert:   nil,
-			Cards:   []Card{},
-			Actions: []Action{},
-			Reasons: []string{"分析进行中，暂无建议"},
-		},
+		State:   stampedState(domain.NewState()),
+		Advice:  advice,
 	}
 }
 
-func failedSnapshot(journey Journey) Snapshot {
-	s := processingSnapshot(journey)
-	s.Status = "failed"
-	s.Advice.Reasons = []string{}
-	s.Error = ptr("行动决策 Agent 调用失败")
-	return s
-}
-
-func readySnapshot(journey Journey, risk, flightStatus, manual string, hasLocation, disrupted bool) Snapshot {
+func readySnapshot(
+	journey domain.Journey,
+	progress domain.JourneyProgress,
+	risk string,
+	flightStatus string,
+	disrupted bool,
+) domain.JourneySnapshot {
 	gate := "B27"
 	if disrupted {
 		gate = "C12"
 	}
 
-	stage := "en_route"
+	hasLocation := progress.HasLocation()
+
+	// 没有定位就算不出路程，相关字段保持 null，风险降级为 unknown
+	if !hasLocation {
+		risk = domain.RiskUnknown
+	}
+
+	state := domain.NewState()
+	state.FlightStatus = flightStatus
+	state.Gate = ptr(gate)
+	state.Timeline = []domain.TimelineNode{
+		{Label: "开始登机", Time: "2026-09-11T14:20:00+08:00"},
+		{Label: "登机口关闭", Time: "2026-09-11T14:45:00+08:00"},
+		{Label: "起飞", Time: "2026-09-11T15:00:00+08:00"},
+	}
+	state.Guide = []string{
+		"T2 入口 → 值机柜台，约 4 分钟",
+		"值机柜台 → 安检，约 6 分钟",
+		"安检 → " + gate + " 登机口，约 14 分钟",
+	}
+	if hasLocation {
+		state.ETAMin = ptr(52)
+		state.Traffic = ptr(domain.TrafficHeavy)
+		state.Quality = domain.QualityComplete
+	} else {
+		state.Quality = domain.QualityDegraded
+	}
+	state = stampedState(state)
+
+	cards := []domain.Card{{Label: "安检排队", Value: "18 分钟"}}
+	alert := "安检排队上升到 45 分钟，缓冲可能不足"
 	reasons := []string{
 		"航班数据更新于 " + time.Now().Format("15:04") + "，来源 flight_status",
 		"安检排队为估计值，置信度低",
 	}
 
-	// 手动确认阶段优先于自动判断
-	if manual != "" {
-		stage = manual
-		reasons = append(reasons, "当前阶段由旅客手动确认，上报定位后自动解除")
-	}
-
-	quality := "complete"
-	cards := []Card{
-		{Label: "安检排队", Value: "18 分钟"},
-	}
-	alert := "安检排队上升到 45 分钟，缓冲可能不足"
-
-	if hasLocation {
-		cards = append([]Card{
-			{Label: "预计到达机场", Value: "52 分钟"},
-		}, cards...)
-		cards = append(cards,
-			Card{Label: "剩余缓冲", Value: "18 分钟"},
-			Card{Label: "最晚出发", Value: "13:28"},
-		)
-	} else {
-		// 没有定位时无法计算路程相关指标
-		stage = fallbackStage(manual)
-		risk = "unknown"
-		quality = "degraded"
-		alert = "尚未获取定位，无法计算路程时间"
-		reasons = append(reasons, "缺少旅客位置，无法计算到机场的耗时")
-	}
-
-	actions := []Action{{
+	actions := []domain.Action{{
 		ID:     "leave_now",
 		Title:  "尽快出发",
 		Detail: "当前路况拥堵，预计 52 分钟到达机场",
-		Nav: &Nav{
+		Nav: &domain.Nav{
 			App: "amapuri://route/plan?dlat=31.1443&dlon=121.8083&dname=PVG%20T2",
 			Web: "https://uri.amap.com/navigation?to=31.1443,121.8083,PVG%20T2&mode=car",
 		},
 	}}
-	if disrupted {
-		actions = append(actions, Action{
-			ID:     "contact_airline",
-			Title:  "联系航空公司确认",
-			Detail: "航班延误且登机口变更，请以航司与机场现场信息为准",
-			Nav:    nil,
-		})
-	}
-	if !hasLocation {
-		actions = []Action{{
+
+	if hasLocation {
+		cards = append([]domain.Card{{Label: "预计到达机场", Value: "52 分钟"}}, cards...)
+		cards = append(cards,
+			domain.Card{Label: "剩余缓冲", Value: "18 分钟"},
+			domain.Card{Label: "最晚出发", Value: "13:28"},
+		)
+	} else {
+		alert = "尚未获取定位，无法计算路程时间"
+		reasons = append(reasons, "缺少旅客位置，无法计算到机场的耗时")
+		actions = []domain.Action{{
 			ID:     "enable_location",
 			Title:  "开启定位或手动确认位置",
 			Detail: "获取位置后才能判断是否来得及",
-			Nav:    nil,
 		}}
 	}
 
-	// 没有定位就算不出路程，对应字段保持 null
-	var eta *int
-	var traffic *string
-	if hasLocation {
-		eta = ptr(52)
-		traffic = ptr("heavy")
+	if disrupted {
+		actions = append(actions, domain.Action{
+			ID:     "contact_airline",
+			Title:  "联系航空公司确认",
+			Detail: "航班延误且登机口变更，请以航司与机场现场信息为准",
+		})
 	}
 
-	return Snapshot{
-		Status:  "ready",
+	// 阶段：手动确认优先，其次是"已拿到定位"推断出的在路上
+	stage := domain.StageUnknown
+	switch {
+	case progress.ManualStage != "":
+		stage = progress.ManualStage
+		reasons = append(reasons, "当前阶段由旅客手动确认，上报定位后自动解除")
+	case hasLocation:
+		stage = domain.StageEnRoute
+	}
+
+	return domain.JourneySnapshot{
+		Status:  domain.StatusReady,
 		Journey: journey,
-		State: State{
-			FlightStatus: flightStatus,
-			Gate:         ptr(gate),
-			Timeline: []TimelineNode{
-				{Label: "开始登机", Time: "2026-09-11T14:20:00+08:00"},
-				{Label: "登机口关闭", Time: "2026-09-11T14:45:00+08:00"},
-				{Label: "起飞", Time: "2026-09-11T15:00:00+08:00"},
-			},
-			ETAMin:    eta,
-			Traffic:   traffic,
-			Guide:     guideFor(gate),
-			Quality:   quality,
-			UpdatedAt: now(),
-		},
-		Advice: Advice{
+		State:   state,
+		Advice: domain.Advice{
 			Stage:   stage,
 			Risk:    risk,
 			Alert:   ptr(alert),
@@ -429,41 +324,19 @@ func readySnapshot(journey Journey, risk, flightStatus, manual string, hasLocati
 	}
 }
 
-// fallbackStage：没有定位且旅客没手动确认时，阶段无法判断
-func fallbackStage(manual string) string {
-	if manual != "" {
-		return manual
-	}
-	return "unknown"
+func stampedState(state domain.State) domain.State {
+	state.UpdatedAt = now()
+	return state
 }
-
-func guideFor(gate string) []string {
-	return []string{
-		"T2 入口 → 值机柜台，约 4 分钟",
-		"值机柜台 → 安检，约 6 分钟",
-		"安检 → " + gate + " 登机口，约 14 分钟",
-	}
-}
-
-var manualStages = map[string]bool{
-	"en_route":   true,
-	"at_airport": true,
-	"check_in":   true,
-	"security":   true,
-	"waiting":    true,
-	"boarding":   true,
-}
-
-func validManualStage(s string) bool { return manualStages[s] }
 
 // ---------- 错误响应 ----------
 
 func badRequest(c *gin.Context, msg string) {
-	c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": msg})
 }
 
 func notFound(c *gin.Context) {
-	c.JSON(http.StatusNotFound, gin.H{"error": "journey not found"})
+	c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "journey not found"})
 }
 
 func main() {
