@@ -18,9 +18,9 @@ function formatTime(iso: string) {
 
 <template>
   <div class="freshness-bar">
-    <span v-if="connected">SSE 已连接</span>
-    <span v-else-if="fallbackActive">实时连接已断开，已切换轮询</span>
-    <span v-else>等待实时连接</span>
+    <span v-if="connected" class="conn-ok">SSE 已连接</span>
+    <span v-else-if="fallbackActive" class="conn-fallback">实时连接已断开，已切换轮询</span>
+    <span v-else class="conn-waiting">等待实时连接</span>
     <span>数据质量：{{ state.quality }}</span>
     <span>更新于：{{ formatTime(state.updatedAt) }}</span>
   </div>
