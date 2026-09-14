@@ -412,6 +412,8 @@ button { font: inherit; }
   font-size: 15px;
   color: var(--text);
   background: #fbfbfd;
+  width: 100%;
+  min-width: 0;
   transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease), background 0.25s var(--ease);
 }
 .form-grid input::placeholder { color: #b0b3ba; }
@@ -602,6 +604,119 @@ button { font: inherit; }
   line-height: 1.7;
 }
 
+/* ---------- 落地页：功能特性区 ---------- */
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.feature-card {
+  background: var(--card);
+  border-radius: var(--radius-md);
+  padding: 26px 24px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid transparent;
+  animation: rise 0.55s var(--ease) backwards;
+}
+.feature-card:nth-child(2) { animation-delay: 0.08s; }
+.feature-card:nth-child(3) { animation-delay: 0.16s; }
+.feature-card:hover {
+  transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease), border-color 0.4s var(--ease);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(0, 113, 227, 0.2);
+}
+.feature-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: rgba(0, 113, 227, 0.09);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  margin-bottom: 16px;
+}
+.feature-icon svg { width: 22px; height: 22px; }
+.feature-card h3 {
+  font-size: 16.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0 0 7px;
+}
+.feature-card p {
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* ---------- 落地页：使用流程步骤条 ---------- */
+.steps {
+  display: flex;
+  gap: 0;
+  margin-top: 14px;
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  box-shadow: var(--shadow-sm);
+  animation: rise 0.55s var(--ease) backwards;
+  animation-delay: 0.24s;
+}
+.step {
+  flex: 1;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  position: relative;
+}
+.step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  right: -2px;
+  left: calc(100% - 22px);
+  height: 1px;
+  background: linear-gradient(90deg, #dde3ea, #eef1f5);
+}
+.step-num {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 113, 227, 0.09);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.step-text h4 {
+  font-size: 15px;
+  font-weight: 650;
+  margin: 4px 0 4px;
+  letter-spacing: -0.01em;
+}
+.step-text p {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ---------- 落地页：数据保障说明 ---------- */
+.trust-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  margin: 24px 0 0;
+  animation: rise 0.55s var(--ease) backwards;
+  animation-delay: 0.32s;
+}
+
 /* ---------- 动效 ---------- */
 @keyframes rise {
   from { opacity: 0; transform: translateY(12px); }
@@ -623,6 +738,8 @@ button { font: inherit; }
   .metrics-row { grid-template-columns: 1fr 1fr; }
   .dashboard { padding: 20px 16px 64px; }
   .panel { padding: 20px; }
+  .steps { flex-direction: column; gap: 20px; }
+  .step:not(:last-child)::after { display: none; }
 }
 @media (max-width: 420px) {
   .metrics-row { grid-template-columns: 1fr; }

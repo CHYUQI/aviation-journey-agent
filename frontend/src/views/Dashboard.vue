@@ -146,6 +146,50 @@ onUnmounted(() => store.stop())
       </form>
     </section>
 
+    <!-- 无行程：落地页补充内容（纯静态展示，不参与逻辑） -->
+    <template v-if="!journeyId">
+      <section class="features" aria-label="产品特性">
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+          </div>
+          <h3>实时延误预警</h3>
+          <p>起飞前持续追踪航班状态，延误与登机口变更第一时间提醒。</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /><path d="M5 12h14" /></svg>
+          </div>
+          <h3>行程时间轴</h3>
+          <p>开始登机、登机口关闭、起飞——关键节点一目了然。</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><polygon points="16.2 7.8 14.1 14.1 7.8 16.2 9.9 9.9 16.2 7.8" /></svg>
+          </div>
+          <h3>一键行动建议</h3>
+          <p>时间紧张时给出可直接执行的动作与路线导航。</p>
+        </article>
+      </section>
+
+      <section class="steps" aria-label="使用流程">
+        <div class="step">
+          <span class="step-num">1</span>
+          <div class="step-text"><h4>创建行程</h4><p>填写航班号与起降机场</p></div>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <div class="step-text"><h4>实时分析</h4><p>追踪状态与位置，评估延误风险</p></div>
+        </div>
+        <div class="step">
+          <span class="step-num">3</span>
+          <div class="step-text"><h4>按建议行动</h4><p>一键导航，从容赶上航班</p></div>
+        </div>
+      </section>
+
+      <p class="trust-note">实时推送 · 服务端时钟校准 · 行程数据不落库</p>
+    </template>
+
     <!-- 有行程：三态渲染 -->
     <template v-else-if="display">
       <StatusBar
