@@ -62,7 +62,7 @@ func main() {
 
 // explore 打开一个网址，列出页面上的输入框和按钮。
 func explore(url string, wait time.Duration) {
-	b, err := browser.Launch(context.Background())
+	b, err := browser.Launch(context.Background(), browser.LaunchOptions{})
 	if err != nil {
 		log.Fatalf("启动浏览器失败：%v", err)
 	}

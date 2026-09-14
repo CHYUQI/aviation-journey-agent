@@ -33,6 +33,15 @@ type Result struct {
 	Issues       []string
 }
 
+// ResolvedFlightIdentity 是 EOOB 航班页解析出的最近班次身份。
+// 它只用于内部补全 Journey，不直接出现在对外契约里。
+type ResolvedFlightIdentity struct {
+	Number string
+	Date   string
+	From   string
+	To     string
+}
+
 // Skill 是一个可被 DataAgent 调用的数据能力。
 //
 // Skill 只负责"取一条有依据的数据"，不做判断、不拼建议。

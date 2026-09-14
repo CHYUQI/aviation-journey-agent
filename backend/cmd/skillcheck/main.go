@@ -30,6 +30,10 @@ func main() {
 	if len(os.Args) > 2 {
 		date = os.Args[2]
 	}
+	from, to := "CAN", "PKX"
+	if len(os.Args) > 4 {
+		from, to = strings.ToUpper(os.Args[3]), strings.ToUpper(os.Args[4])
+	}
 
 	cfg := config.Load()
 	if !cfg.Search.Configured() {
@@ -46,7 +50,7 @@ func main() {
 
 	journey := domain.Journey{
 		ID:         "debug",
-		Flights:    []domain.Flight{{Number: flightNo, Date: date, From: "CAN", To: "PKX"}},
+		Flights:    []domain.Flight{{Number: flightNo, Date: date, From: from, To: to}},
 		HasBaggage: true,
 	}
 

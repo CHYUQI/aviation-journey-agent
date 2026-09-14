@@ -14,8 +14,11 @@ import (
 )
 
 // analyzeTimeout 是单次分析的超时上限。
-// 分析要调用大模型和多个数据技能，所以给得比普通请求宽。
-const analyzeTimeout = 90 * time.Second
+//
+// 分析要跑浏览器抓页面、调大模型抽字段、再调一次模型做决策，
+// 数据源还可能逐个失败重试。90 秒实测会被耗光，导致后面的模型调用
+// 直接 context deadline exceeded —— 那样连兜底建议都给不出来。
+const analyzeTimeout = 180 * time.Second
 
 // Runtime 编排 DataAgent 与 AdviceAgent，负责快照的保存与推送。
 //
@@ -93,9 +96,6 @@ func (r *Runtime) Recalculate(ctx context.Context, id string) (domain.JourneySna
 	previous, hasPrevious := r.previousSnapshot(id)
 
 	input := dataagent.Input{Journey: journey, Progress: progress}
-	if hasPrevious {
-		input.Previous = &previous.State
-	}
 
 	result, buildErr := r.data.BuildState(ctx, input)
 	if buildErr != nil {
@@ -107,6 +107,13 @@ func (r *Runtime) Recalculate(ctx context.Context, id string) (domain.JourneySna
 			Advice:  domain.NewAdvice(),
 			Error:   &msg,
 		}), nil
+	}
+
+	// DataAgent 可能用 EOOB 航班号搜索接口补全了最近班次和航线。
+	// 把它写回 store，保证快照里的 journey 也是实际分析使用的那一份。
+	if result.Journey.ID != "" {
+		journey = result.Journey
+		r.store.SaveJourney(journey)
 	}
 
 	return r.finish(id, domain.JourneySnapshot{

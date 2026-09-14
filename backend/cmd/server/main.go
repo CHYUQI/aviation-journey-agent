@@ -30,9 +30,9 @@ func main() {
 
 	skillRegistry := skill.NewRegistry()
 	skillRegistry.Register(skill.NewFlightStatusSkill(searchClient))
-	skillRegistry.Register(skill.AirportStatusSkill{})
+	skillRegistry.Register(skill.NewFlightIdentitySkill())
+	skillRegistry.Register(skill.NewAirportStatusSkill())
 	skillRegistry.Register(skill.RouteETASkill{})
-	skillRegistry.Register(skill.OfficialSearchSkill{})
 
 	dataAgent := dataagent.NewAgent(skillRegistry)
 	adviceAgent := adviceagent.NewAgent(newModelClient(cfg))

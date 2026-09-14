@@ -66,15 +66,16 @@ func (m modelAdvice) toDomain(nav *domain.Nav) domain.Advice {
 		result.Reasons = []string{}
 	}
 
-	// 过滤掉内容为空的指标卡
+	// 过滤掉内容为空或值为"未知"的指标卡。
+	// 未知信息应进 reasons，不应作为面向旅客的数字卡片。
 	validCards := make([]domain.Card, 0, len(result.Cards))
 	for _, c := range result.Cards {
-		if strings.TrimSpace(c.Label) != "" && strings.TrimSpace(c.Value) != "" {
-			validCards = append(validCards, domain.Card{
-				Label: strings.TrimSpace(c.Label),
-				Value: strings.TrimSpace(c.Value),
-			})
+		label := strings.TrimSpace(c.Label)
+		value := strings.TrimSpace(c.Value)
+		if label == "" || value == "" || isUnknownText(value) {
+			continue
 		}
+		validCards = append(validCards, domain.Card{Label: label, Value: value})
 	}
 	result.Cards = validCards
 
@@ -125,15 +126,36 @@ func enforceRiskFloor(result *domain.Advice, state domain.State) {
 	}
 	result.Risk = domain.RiskUnknown
 
-	// 风险都判断不了，就不该再给出"立即出发"这类高强度行动
+	// 风险都判断不了，就不该再给出"立即出发"这类高强度行动；
+	// 只复述"未知/未公布/无法计算"的行动也不输出，避免把缺失数据包装成建议。
 	filtered := make([]domain.Action, 0, len(result.Actions))
 	for _, a := range result.Actions {
-		if a.Nav != nil {
+		if a.Nav != nil || actionRestatesMissing(a) {
 			continue
 		}
 		filtered = append(filtered, a)
 	}
 	result.Actions = filtered
+}
+
+func isUnknownText(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return true
+	}
+	for _, marker := range []string{
+		"未知", "未公布", "尚未公布", "待公布", "暂无", "无数据", "没有数据",
+		"无法计算", "无法判断", "unknown", "n/a", "--",
+	} {
+		if strings.Contains(value, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func actionRestatesMissing(action domain.Action) bool {
+	return isUnknownText(action.Title) || isUnknownText(action.Detail)
 }
 
 func cleanStringPtr(s *string) *string {

@@ -145,7 +145,7 @@ func FlightNumberDigits(flightNumber string) string {
 // 还会频繁改版。让模型从文本里抽字段、代码再回原文校验，
 // 比为每家航司写解析器更耐用。
 func RunRecipe(ctx context.Context, recipe AirlineRecipe, flightNumber string) (string, error) {
-	b, err := browser.Launch(ctx)
+	b, err := browser.Launch(ctx, browser.LaunchOptions{})
 	if err != nil {
 		return "", err
 	}

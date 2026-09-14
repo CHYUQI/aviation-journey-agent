@@ -126,3 +126,73 @@ func jsLiteral(s string) string {
 	}
 	return string(raw)
 }
+
+// quickProblem 检查页面是不是明显不对（404、挑战页、错误页）。
+//
+// 这样做是为了不等满超时：实测一个 404 页面会让我们白等 25 秒，
+// 叠上别的数据源直接把整轮分析的时间预算耗光。
+// 返回空字符串表示看起来正常。
+func (b *Browser) quickProblem() string {
+	title, err := b.EvaluateString("document.title")
+	if err != nil {
+		return ""
+	}
+	title = strings.TrimSpace(title)
+	switch {
+	case strings.Contains(title, "404"):
+		return "页面不存在（404）"
+	case strings.Contains(title, "请稍候"), strings.Contains(title, "Just a moment"):
+		return "被站点的机器人防护拦住（Cloudflare 挑战页）"
+	case strings.Contains(title, "403"), strings.Contains(title, "Forbidden"):
+		return "访问被拒绝（403）"
+	}
+	return ""
+}
+
+// WaitSelectorOrProblem 等元素出现，但页面明显不对时立刻返回错误。
+//
+// 与 WaitSelector 的区别：WaitSelector 只认元素，页面是 404 或挑战页时
+// 也会一直等到超时。
+func (b *Browser) WaitSelectorOrProblem(selector string, timeout time.Duration) error {
+	expr := fmt.Sprintf("document.querySelector(%s) ? 'ok' : 'not-found'", jsLiteral(selector))
+
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		result, err := b.EvaluateString(expr)
+		if err == nil && strings.TrimSpace(result) == "ok" {
+			return nil
+		}
+		if problem := b.quickProblem(); problem != "" {
+			return fmt.Errorf("%s", problem)
+		}
+		time.Sleep(600 * time.Millisecond)
+	}
+	return fmt.Errorf("等待元素 %q 超时（%s）", selector, timeout)
+}
+
+// WaitSelectorValue 等某个元素出现、并且内容不是空的。
+//
+// 与 WaitSelector 的区别很关键：页面骨架里的元素往往先以空内容出现，
+// 数据是之后由脚本填进去的。只等"元素存在"会读到空值 —— 实测
+// 航班级页面就是这样，元素在、值是空的，被误判成"页面上没有数据"。
+func (b *Browser) WaitSelectorValue(selector string, timeout time.Duration) error {
+	expr := fmt.Sprintf(`(() => {
+		const el = document.querySelector(%s)
+		if (!el) return ''
+		const t = (el.innerText || '').trim()
+		return (t === '' || t === '--' || t === '-') ? '' : t
+	})()`, jsLiteral(selector))
+
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		result, err := b.EvaluateString(expr)
+		if err == nil && strings.TrimSpace(result) != "" {
+			return nil
+		}
+		if problem := b.quickProblem(); problem != "" {
+			return fmt.Errorf("%s", problem)
+		}
+		time.Sleep(600 * time.Millisecond)
+	}
+	return fmt.Errorf("等待 %q 出现内容超时（%s）", selector, timeout)
+}

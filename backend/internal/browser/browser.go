@@ -40,20 +40,39 @@ type Browser struct {
 	seq     int
 }
 
+// LaunchOptions 是启动参数。
+type LaunchOptions struct {
+	// UserAgent 为空时，自动使用「去掉 Headless 标记」的浏览器原生 UA
+	UserAgent string
+}
+
 // Launch 启动无头浏览器并连上调试端口。
 //
 // 用 --remote-debugging-port=0 让系统分配端口，再从 user-data-dir 下的
 // DevToolsActivePort 文件读回来 —— 这样不会和用户已开的浏览器抢端口。
-func Launch(ctx context.Context) (*Browser, error) {
+func Launch(ctx context.Context, opts LaunchOptions) (*Browser, error) {
 	exe, err := findBrowser()
 	if err != nil {
 		return nil, err
 	}
 
-	profile, err := os.MkdirTemp("", "ajb-browser-")
+	// 用固定的配置目录，不要每次新建。
+	//
+	// 这不是"优化"，是能不能访问的问题：站点前面挂着 Cloudflare，
+	// 一次性 profile 意味着每次都是全新访客，挑战会反复出现。
+	// 真人浏览是一个 profile 一直用，clearance cookie 一直在。
+	profile, err := os.UserCacheDir()
 	if err != nil {
+		profile = os.TempDir()
+	}
+	profile = filepath.Join(profile, "aviation-journey-agent", "browser-profile")
+	if err := os.MkdirAll(profile, 0o700); err != nil {
 		return nil, fmt.Errorf("创建浏览器配置目录失败: %w", err)
 	}
+
+	// 固定 profile 会留下上一次的调试端口文件。若不在启动前清掉，
+	// waitForPort 可能先读到旧端口，连到已经退出的浏览器进程。
+	_ = os.Remove(filepath.Join(profile, "DevToolsActivePort"))
 
 	cmd := exec.Command(exe,
 		"--headless=new",
@@ -101,7 +120,40 @@ func Launch(ctx context.Context) (*Browser, error) {
 		return nil, err
 	}
 
+	// 设置 UA 必须在导航之前做，否则第一个真实请求就带着 Headless 标记
+	if err := b.applyUserAgent(opts.UserAgent); err != nil {
+		b.Close()
+		return nil, err
+	}
+
 	return b, nil
+}
+
+// applyUserAgent 设置请求头里的 User-Agent。
+//
+// 为什么必须做：headless 模式默认上报 "HeadlessChrome/..."，很多站点的
+// 机器人防护直接据此拦截 —— 实测 eoob.com.cn 的 Cloudflare 就是这么判的，
+// 补再多的普通请求头都没用。
+//
+// 这里不写死版本号，而是读浏览器自己的 UA 再把 Headless 标记去掉，
+// 浏览器升级后不用改代码。
+func (b *Browser) applyUserAgent(custom string) error {
+	if custom == "" {
+		real, err := b.EvaluateString("navigator.userAgent")
+		if err != nil || real == "" {
+			return nil
+		}
+		custom = strings.Replace(real, "HeadlessChrome", "Chrome", 1)
+		if custom == real {
+			return nil // 本来就不是 headless UA，不用改
+		}
+	}
+
+	if _, err := b.call("Network.enable", nil); err != nil {
+		return err
+	}
+	_, err := b.call("Network.setUserAgentOverride", map[string]any{"userAgent": custom})
+	return err
 }
 
 // Close 关闭连接、结束浏览器进程树，并清掉临时配置目录。
@@ -115,10 +167,9 @@ func (b *Browser) Close() error {
 		_, _ = b.cmd.Process.Wait()
 		b.cmd = nil
 	}
+	// 刻意不删 profile：cookie 要留着，下次访问才不用重新过挑战
 	if b.profile != "" {
-		// 给子进程一点退出的时间，否则目录还占着删不掉
 		time.Sleep(300 * time.Millisecond)
-		_ = os.RemoveAll(b.profile)
 		b.profile = ""
 	}
 	return nil
