@@ -388,7 +388,7 @@ button { font: inherit; }
 
 /* ---------- 创建行程表单 ---------- */
 .journey-form {
-  max-width: 640px;
+  width: 100%;
   margin: 0 auto;
 }
 .journey-form form { display: grid; gap: 20px; }
