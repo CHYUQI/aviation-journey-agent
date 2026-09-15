@@ -23,13 +23,13 @@ const refreshInterval = 15 * time.Second
 
 func main() {
 	cfg := config.Load()
+	// 模型调用并发上限：默认串行，避免并发打爆端点导致 45s+ 超时（见 internal/model/limiter.go）
+	model.SetMaxConcurrency(cfg.Model.MaxConcurrency)
 
 	memoryStore := store.NewMemoryStore()
 
-	searchClient := newSearchClient(cfg)
-
 	skillRegistry := skill.NewRegistry()
-	skillRegistry.Register(skill.NewFlightStatusSkill(searchClient))
+	skillRegistry.Register(skill.NewFlightStatusSkill())
 	skillRegistry.Register(skill.NewFlightIdentitySkill())
 	skillRegistry.Register(skill.NewAirportStatusSkill())
 	skillRegistry.Register(skill.RouteETASkill{})
@@ -71,29 +71,6 @@ func newModelClient(cfg config.Config) model.Client {
 		APIKey:      cfg.Model.APIKey,
 		Model:       cfg.Model.Name,
 		Timeout:     cfg.Model.Timeout,
-		Temperature: cfg.Model.Temperature,
-	})
-}
-
-// newSearchClient 构造联网检索客户端。
-//
-// 必须用百炼原生端点：实测 OpenAI 兼容端点会静默忽略 enable_search，
-// 模型拿不到检索结果，就会退回凭记忆回答 —— 实测会编造出不存在的内容。
-// 未配置时返回 nil，数据技能会返回空结果并让上层降级。
-func newSearchClient(cfg config.Config) model.Client {
-	if !cfg.Search.Configured() {
-		log.Println("提示：联网检索未配置。设置 MODEL_NATIVE_URL 与 MODEL_SEARCH_NAME 后，数据技能才能查到真实航班动态。")
-		return nil
-	}
-
-	log.Printf("检索：%s @ %s（超时 %s）", cfg.Search.Model, cfg.Search.BaseURL, cfg.Search.Timeout)
-
-	return model.NewDashScope(model.DashScopeOptions{
-		BaseURL:     cfg.Search.BaseURL,
-		APIKey:      cfg.Search.APIKey,
-		Model:       cfg.Search.Model,
-		SearchModel: cfg.Search.Model,
-		Timeout:     cfg.Search.Timeout,
 		Temperature: cfg.Model.Temperature,
 	})
 }

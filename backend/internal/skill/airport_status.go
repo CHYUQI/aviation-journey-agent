@@ -14,18 +14,27 @@ import (
 	_ "time/tzdata"
 
 	xhtml "golang.org/x/net/html"
-
-	"aviation-journey-agent/backend/internal/browser"
 )
 
 const (
 	eoobAirportHTTPTimeout = 20 * time.Second
 	eoobAirportMaxHTMLSize = 2 << 20
 	eoobAirportMaxJSONSize = 1 << 20
-	eoobAirportWait        = 25 * time.Second
-	// eoobAirportUserAgent 必须跟当前浏览器版本同代。
-	// 实测 Chrome/120 会被 Cloudflare 403；Chrome/153 能直接拿到静态 HTML。
-	eoobAirportUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+	// eoobChromeVersion 是 UA 与 Sec-CH-UA 共用的 Chromium 主版本，两者必须同源。
+	// 取装机 Edge/Chrome 的主版本（当前 153）；升级浏览器时只改这一处。
+	eoobChromeVersion = "153"
+
+	// eoobAirportUserAgent 由 eoobChromeVersion 拼出来，禁止再写死版本号。
+	eoobAirportUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+		"(KHTML, like Gecko) Chrome/" + eoobChromeVersion + ".0.0.0 Safari/537.36"
+)
+
+// eoobSecCHUA* 是随 UA 一起发出的客户端提示，版本取自 eoobChromeVersion。
+// 只声称自己是 Chrome 却不带这些提示，Cloudflare 会直接判定为脚本。
+var (
+	eoobSecCHUA                = fmt.Sprintf("\"Chromium\";v=\"%s\", \"Not)A;Brand\";v=\"24\", \"Google Chrome\";v=\"%s\"", eoobChromeVersion, eoobChromeVersion)
+	eoobSecCHUAFullVersion     = eoobChromeVersion + ".0.0.0"
+	eoobSecCHUAFullVersionList = fmt.Sprintf("\"Chromium\";v=\"%s\", \"Not)A;Brand\";v=\"24.0.0.0\", \"Google Chrome\";v=\"%s\"", eoobSecCHUAFullVersion, eoobSecCHUAFullVersion)
 )
 
 // AirportStatusSkill 查询机场基础信息、计划客流和近期延误情况。
@@ -34,7 +43,7 @@ const (
 //   - 机场页 HTML：{base}/{IATA}，解析数据概览和内嵌客流；
 //   - 延误接口：{base}/api/delaybox/{IATA}，页面自己的延误组件使用同一接口。
 //
-// 字段结构固定，不使用模型抽取；HTTP 被 Cloudflare 拦时用浏览器兜底。
+// 字段结构固定，不使用模型抽取；全部走 HTTP，无头浏览器在 EOOB 上必被 Cloudflare 拦。
 type AirportStatusSkill struct {
 	Client  *http.Client
 	BaseURL string
@@ -62,7 +71,7 @@ func (s AirportStatusSkill) Execute(ctx context.Context, query Query) (Result, e
 	}
 
 	pageURL := s.baseURL() + "/" + iata
-	rawHTML, err := s.fetchAirportHTML(ctx, pageURL)
+	rawHTML, err := s.fetchAirportHTMLHTTP(ctx, pageURL)
 	if err != nil {
 		return Result{Issues: []string{fmt.Sprintf("EOOB 机场页查询失败：%v", err)}}, nil
 	}
@@ -179,7 +188,7 @@ func fetchEOOBAirportOverview(ctx context.Context, iata string) (map[string]stri
 	}
 
 	skill := NewAirportStatusSkill()
-	rawHTML, err := skill.fetchAirportHTML(ctx, skill.baseURL()+"/"+iata)
+	rawHTML, err := skill.fetchAirportHTMLHTTP(ctx, skill.baseURL()+"/"+iata)
 	if err != nil {
 		return nil, err
 	}
@@ -227,21 +236,6 @@ func resolveEOOBAirportCoordinates(ctx context.Context, iata string) (float64, f
 	}
 	return lat, lng, nil
 }
-
-func (s AirportStatusSkill) fetchAirportHTML(ctx context.Context, pageURL string) (string, error) {
-	body, httpErr := s.fetchAirportHTMLHTTP(ctx, pageURL)
-	if httpErr == nil {
-		return body, nil
-	}
-
-	body, browserErr := fetchAirportHTMLBrowser(ctx, pageURL)
-	if browserErr == nil {
-		return body, nil
-	}
-
-	return "", fmt.Errorf("HTTP 访问失败（%v），浏览器兜底也失败（%v）", httpErr, browserErr)
-}
-
 func (s AirportStatusSkill) fetchAirportHTMLHTTP(ctx context.Context, pageURL string) (string, error) {
 	client := s.Client
 	if client == nil {
@@ -252,7 +246,7 @@ func (s AirportStatusSkill) fetchAirportHTMLHTTP(ctx context.Context, pageURL st
 	if err != nil {
 		return "", err
 	}
-	setEOOBHeaders(req, "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	setEOOBHeaders(req, "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", eoobDocument)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -278,44 +272,16 @@ func (s AirportStatusSkill) fetchAirportHTMLHTTP(ctx context.Context, pageURL st
 	return text, nil
 }
 
-func fetchAirportHTMLBrowser(ctx context.Context, pageURL string) (string, error) {
-	b, err := browser.Launch(ctx, browser.LaunchOptions{})
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = b.Close() }()
-
-	if err := b.Navigate(pageURL); err != nil {
-		return "", err
-	}
-	if err := b.WaitText("数据概览", eoobAirportWait); err != nil {
-		return "", err
-	}
-
-	rawHTML, err := b.EvaluateString("document.documentElement.outerHTML")
-	if err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(rawHTML) == "" {
-		return "", errors.New("浏览器没有返回 HTML")
-	}
-	return rawHTML, nil
-}
-
+// fetchEOOBDelay 只走 HTTP。EOOB 的无头浏览器必被 Cloudflare 拦，
+// 所以不做浏览器兜底：拿不到就如实报错，由上层写进 issue 并降级。
 func (s AirportStatusSkill) fetchEOOBDelay(ctx context.Context, iata string) (*eoobDelayBox, error) {
 	apiURL := s.baseURL() + "/api/delaybox/" + iata
 
-	body, httpErr := s.fetchEOOBDelayHTTP(ctx, apiURL)
-	if httpErr == nil {
-		return parseEOOBDelayBox(body)
+	body, err := s.fetchEOOBDelayHTTP(ctx, apiURL)
+	if err != nil {
+		return nil, err
 	}
-
-	body, browserErr := fetchEOOBDelayBrowser(ctx, s.baseURL()+"/"+iata, apiURL)
-	if browserErr == nil {
-		return parseEOOBDelayBox(body)
-	}
-
-	return nil, fmt.Errorf("HTTP 访问失败（%v），浏览器兜底也失败（%v）", httpErr, browserErr)
+	return parseEOOBDelayBox(body)
 }
 
 func (s AirportStatusSkill) fetchEOOBDelayHTTP(ctx context.Context, apiURL string) ([]byte, error) {
@@ -328,7 +294,7 @@ func (s AirportStatusSkill) fetchEOOBDelayHTTP(ctx context.Context, apiURL strin
 	if err != nil {
 		return nil, err
 	}
-	setEOOBHeaders(req, "application/json, text/plain, */*")
+	setEOOBHeaders(req, "application/json, text/plain, */*", eoobJSONRequest)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -349,47 +315,48 @@ func (s AirportStatusSkill) fetchEOOBDelayHTTP(ctx context.Context, apiURL strin
 	return body, nil
 }
 
-func fetchEOOBDelayBrowser(ctx context.Context, pageURL, apiURL string) ([]byte, error) {
-	b, err := browser.Launch(ctx, browser.LaunchOptions{})
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = b.Close() }()
+// eoobRequestKind 区分浏览器会发出的两类请求：地址栏导航与页面内 XHR。
+type eoobRequestKind int
 
-	if err := b.Navigate(pageURL); err != nil {
-		return nil, err
-	}
-	if err := b.WaitText("数据概览", eoobAirportWait); err != nil {
-		return nil, err
-	}
+const (
+	// eoobDocument 是地址栏导航（机场页、航班页）。
+	eoobDocument eoobRequestKind = iota
+	// eoobJSONRequest 是页面上 JS 发起的接口请求（delaybox、航班状态 JSON）。
+	eoobJSONRequest
+)
 
-	quotedURL, _ := json.Marshal(apiURL)
-	expr := fmt.Sprintf(`(async () => {
-		const resp = await fetch(%s, { headers: { 'Accept': 'application/json, text/plain, */*' } })
-		if (!resp.ok) return '__HTTP_' + resp.status
-		return await resp.text()
-	})()`, quotedURL)
-
-	raw, err := b.EvaluateString(expr)
-	if err != nil {
-		return nil, err
-	}
-	if strings.HasPrefix(raw, "__HTTP_") {
-		return nil, errors.New(raw)
-	}
-	if strings.TrimSpace(raw) == "" {
-		return nil, errors.New("延误接口返回空内容")
-	}
-	if isCloudflareChallenge(raw) {
-		return nil, errors.New("延误接口被 Cloudflare 挑战页拦截")
-	}
-	return []byte(raw), nil
-}
-
-func setEOOBHeaders(req *http.Request, accept string) {
+// setEOOBHeaders 装上一组**自洽**的浏览器请求头。
+//
+// 为什么不能只改 User-Agent：Cloudflare 在 eoob.com.cn 上下发 managed challenge，
+// 响应头用 Accept-Ch/Critical-Ch 点名索要 Sec-CH-UA 系列客户端提示。
+// 声称自己是 Chrome 却不带这些提示，等于自曝是脚本 ——
+// 实测（Go http 客户端，各 5 次）：只有 UA 时 5/5 被挑战；补上提示后 5/5 拿到页面。
+func setEOOBHeaders(req *http.Request, accept string, kind eoobRequestKind) {
 	req.Header.Set("User-Agent", eoobAirportUserAgent)
 	req.Header.Set("Accept", accept)
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+
+	// 与 UA 同版本的客户端提示，缺一不可
+	req.Header.Set("Sec-Ch-Ua", eoobSecCHUA)
+	req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
+	req.Header.Set("Sec-Ch-Ua-Platform", `"Windows"`)
+	req.Header.Set("Sec-Ch-Ua-Platform-Version", `"10.0.0"`)
+	req.Header.Set("Sec-Ch-Ua-Arch", `"x86"`)
+	req.Header.Set("Sec-Ch-Ua-Bitness", `"64"`)
+	req.Header.Set("Sec-Ch-Ua-Full-Version", eoobSecCHUAFullVersion)
+	req.Header.Set("Sec-Ch-Ua-Full-Version-List", eoobSecCHUAFullVersionList)
+
+	if kind == eoobJSONRequest {
+		req.Header.Set("Sec-Fetch-Dest", "empty")
+		req.Header.Set("Sec-Fetch-Mode", "cors")
+		req.Header.Set("Sec-Fetch-Site", "same-site")
+		return
+	}
+	req.Header.Set("Sec-Fetch-Dest", "document")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Site", "none")
+	req.Header.Set("Sec-Fetch-User", "?1")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
 }
 
 func isCloudflareChallenge(text string) bool {
@@ -597,9 +564,9 @@ func airportTrafficLines(loadData eoobAirportLoadData, currentHour int) []string
 
 func formatAirportTrafficLine(label string, current, total int) string {
 	if current > 0 {
-		return fmt.Sprintf("客流（%s）：当前小时计划旅客座位数 %d，未来24小时约 %d", label, current, total)
+		return fmt.Sprintf("客流（%s）：当前小时计划旅客座位数 %d 座，未来 24 小时合计约 %d 座", label, current, total)
 	}
-	return fmt.Sprintf("客流（%s）：当前小时数据暂缺，未来24小时约 %d", label, total)
+	return fmt.Sprintf("客流（%s）：当前小时数据暂缺，未来 24 小时合计约 %d 座", label, total)
 }
 
 func rollingSeatTotal(direction eoobAirportLoadDirection, currentHour int) int {

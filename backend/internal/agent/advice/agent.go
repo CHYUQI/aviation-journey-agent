@@ -15,6 +15,9 @@ type Input struct {
 	Issues []string
 	// AirportIATA 用于生成"导航到机场"的跳转链接
 	AirportIATA string
+	// HasBaggage 表示旅客是否携带托运行李。
+	// 带托运要预留值机/托运时间，不带则可以直接安检 —— 这会改变行动建议。
+	HasBaggage bool
 }
 
 // Agent 根据行程状态生成行动建议。

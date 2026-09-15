@@ -46,8 +46,8 @@ const activeIndex = computed(() => {
 
     <template v-if="guide.length">
       <div class="panel-heading">
-        <h2>机场内指引</h2>
-        <span>文字步行指引</span>
+        <h2>机场信息</h2>
+        <span>数据源原文</span>
       </div>
       <ol class="guide">
         <li v-for="line in guide" :key="line">{{ line }}</li>

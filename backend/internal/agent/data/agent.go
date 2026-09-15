@@ -71,6 +71,14 @@ func (a *Agent) BuildState(ctx context.Context, in Input) (Result, error) {
 		log.Printf("[data] journey=%s %s", journey.ID, issue)
 	}
 	applyObservations(&state, queryResult.Observations)
+
+	// 航班已经起飞或取消之后，"到机场还要多久"对旅客不再有意义：
+	// 留着它只会让建议退化成"乘飞机去机场"这种误导。这里直接在状态层清掉。
+	if flightFinished(state.FlightStatus) && state.ETAMin != nil {
+		state.ETAMin = nil
+		result.Issues = append(result.Issues, "航班已起飞或取消，到机场的路程时间不再有意义，已忽略")
+	}
+
 	state.Quality = assessQuality(state, etaRequired(in.Progress))
 
 	result.State = state
@@ -177,7 +185,7 @@ func applyObservations(state *domain.State, observations []skill.Observation) {
 // 时间是模型从网页里读出来的，格式不一定可靠：解析不过的一律丢掉。
 // 节点按时间升序排列，因为契约要求如此。
 func buildTimeline(times skill.FlightTimes) []domain.TimelineNode {
-	nodes := make([]domain.TimelineNode, 0, 3)
+	nodes := make([]domain.TimelineNode, 0, 4)
 
 	add := func(label, raw string) {
 		raw = strings.TrimSpace(raw)
@@ -193,6 +201,7 @@ func buildTimeline(times skill.FlightTimes) []domain.TimelineNode {
 	add("开始登机", times.BoardingTime)
 	add("登机口关闭", times.GateCloseTime)
 	add("起飞", times.DepartureTime)
+	add("到达", times.ArrivalTime)
 
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Time < nodes[j].Time })
 	return nodes
@@ -239,6 +248,12 @@ func assessQuality(state domain.State, etaRequired bool) string {
 
 // etaRequired 判断当前阶段是否必须知道"到机场要多久"。
 // 已经在机场或更后面的阶段时，ETA 不再是关键数据。
+// flightFinished 判断航班是否已经结束（起飞或取消）。
+// 结束后再算"到机场要多久"对旅客没有意义。
+func flightFinished(status string) bool {
+	return status == domain.FlightStatusDeparted || status == domain.FlightStatusCancelled
+}
+
 func etaRequired(progress domain.JourneyProgress) bool {
 	switch progress.ManualStage {
 	case domain.StageAtAirport, domain.StageCheckIn, domain.StageSecurity,

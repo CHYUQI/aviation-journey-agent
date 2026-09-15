@@ -542,6 +542,17 @@ button { font: inherit; }
 .freshness-bar span.conn-waiting::before { background: #8e8e93; box-shadow: 0 0 0 3px rgba(142, 142, 147, 0.18); }
 
 /* ---------- 手动确认阶段 ---------- */
+/* ---------- 定位上报：主按钮 + 状态反馈 ---------- */
+.locate-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.locate-row .primary { padding: 10px 20px; font-size: 14px; }
+.locate-row .primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .stage-options { display: flex; flex-wrap: wrap; gap: 10px; }
 .stage-options button {
   border: 1px solid #d9dde3;

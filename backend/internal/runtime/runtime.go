@@ -116,10 +116,15 @@ func (r *Runtime) Recalculate(ctx context.Context, id string) (domain.JourneySna
 		r.store.SaveJourney(journey)
 	}
 
+	// 先盖服务端时间戳再交给 AdviceAgent。
+	// 模型看到的 state.updatedAt 必须是真实值，否则它会在 reasons 里写
+	// "updatedAt 为空、无法确认数据时效性" 这种对旅客没有意义的话。
+	result.State = r.stamp(result.State)
+
 	return r.finish(id, domain.JourneySnapshot{
 		Status:  domain.StatusReady,
 		Journey: journey,
-		State:   r.stamp(result.State),
+		State:   result.State,
 		Advice:  r.decide(ctx, result, progress, journey, previous, hasPrevious),
 	}), nil
 }
@@ -141,12 +146,69 @@ func (r *Runtime) decide(
 		return previous.Advice
 	}
 
-	return r.advice.Evaluate(ctx, adviceagent.Input{
+	next := r.advice.Evaluate(ctx, adviceagent.Input{
 		State:       result.State,
 		Progress:    progress,
 		Issues:      result.Issues,
 		AirportIATA: departureAirport(journey),
+		HasBaggage:  journey.HasBaggage,
 	})
+
+	// 刷新时模型/数据源临时故障，本轮建议会变成空壳（risk=unknown、没有卡片也没有行动）。
+	// 直接落库等于把上一轮算好的建议擦掉，界面上就是"卡片突然消失"。
+	// 这种降级不清空内容：保留上一轮建议，只把新的问题并进 reasons。
+	if hasPrevious && previous.Status == domain.StatusReady &&
+		next.Risk == domain.RiskUnknown && !hasAdviceContent(next) && hasAdviceContent(previous.Advice) {
+		merged := previous.Advice
+		if next.Stage != domain.StageUnknown {
+			merged.Stage = next.Stage
+		}
+		// 风险取更保守的一侧：不做安全结论(unknown)排在最后，
+		// 免得用旧结论盖住新一轮的数据缺失。
+		merged.Risk = moreConservativeRisk(previous.Advice.Risk, next.Risk)
+		merged.Reasons = mergeReasons(previous.Advice.Reasons, next.Reasons)
+		return merged
+	}
+
+	return next
+}
+
+// riskRank 给风险等级排序，越大越保守。
+var riskRank = map[string]int{
+	domain.RiskGreen:   0,
+	domain.RiskYellow:  1,
+	domain.RiskOrange:  2,
+	domain.RiskRed:     3,
+	domain.RiskUnknown: 4,
+}
+
+// moreConservativeRisk 返回两者中更保守的风险等级。
+func moreConservativeRisk(a, b string) string {
+	if riskRank[b] > riskRank[a] {
+		return b
+	}
+	return a
+}
+
+// hasAdviceContent 判断建议里有没有面向旅客的内容（卡片或行动）。
+func hasAdviceContent(a domain.Advice) bool {
+	return len(a.Cards) > 0 || len(a.Actions) > 0
+}
+
+// mergeReasons 合并两组依据：新的在前，去重且保持出现顺序。
+func mergeReasons(newer, older []string) []string {
+	seen := make(map[string]bool, len(newer)+len(older))
+	merged := make([]string, 0, len(newer)+len(older))
+	for _, group := range [][]string{newer, older} {
+		for _, reason := range group {
+			if reason == "" || seen[reason] {
+				continue
+			}
+			seen[reason] = true
+			merged = append(merged, reason)
+		}
+	}
+	return merged
 }
 
 func (r *Runtime) GetSnapshot(id string) (domain.JourneySnapshot, error) {

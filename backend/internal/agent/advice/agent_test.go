@@ -222,3 +222,55 @@ func hasReason(reasons []string, keyword string) bool {
 	}
 	return false
 }
+
+// TestUserPromptCarriesLocationFlag 锁住一件事：阶段判断依赖"有没有定位"，
+// 但坐标本身不下发给模型（隐私最小化）。
+func TestUserPromptCarriesLocationFlag(t *testing.T) {
+	state := readyState()
+
+	t.Run("有定位时带 locationProvided", func(t *testing.T) {
+		prompt, err := userPrompt(Input{
+			State:    state,
+			Progress: domain.JourneyProgress{Location: &domain.Coordinate{Lat: 22.5431, Lng: 114.0579}},
+		})
+		if err != nil {
+			t.Fatalf("构造 prompt 失败: %v", err)
+		}
+		if !strings.Contains(prompt, `"locationProvided": true`) {
+			t.Fatalf("有定位时应下发 locationProvided：\n%s", prompt)
+		}
+		if strings.Contains(prompt, "114.0579") || strings.Contains(prompt, "22.5431") {
+			t.Fatalf("不应把精确坐标下发给模型：\n%s", prompt)
+		}
+	})
+
+	t.Run("无定位时不带该字段", func(t *testing.T) {
+		prompt, err := userPrompt(Input{State: state})
+		if err != nil {
+			t.Fatalf("构造 prompt 失败: %v", err)
+		}
+		if strings.Contains(prompt, "locationProvided") {
+			t.Fatalf("没有定位时不应出现 locationProvided：\n%s", prompt)
+		}
+	})
+}
+
+// TestUserPromptCarriesBaggage 锁住"托运行李会影响建议"这条输入契约：
+// 有无托运必须明确下发给模型，否则建议里永远不会有托运环节。
+func TestUserPromptCarriesBaggage(t *testing.T) {
+	withBaggage, err := userPrompt(Input{State: readyState(), HasBaggage: true})
+	if err != nil {
+		t.Fatalf("构造 prompt 失败: %v", err)
+	}
+	if !strings.Contains(withBaggage, `"hasBaggage": true`) {
+		t.Fatalf("带托运行李时应下发 hasBaggage=true：\n%s", withBaggage)
+	}
+
+	withoutBaggage, err := userPrompt(Input{State: readyState()})
+	if err != nil {
+		t.Fatalf("构造 prompt 失败: %v", err)
+	}
+	if !strings.Contains(withoutBaggage, `"hasBaggage": false`) {
+		t.Fatalf("不带行李时也应明确下发 hasBaggage=false：\n%s", withoutBaggage)
+	}
+}

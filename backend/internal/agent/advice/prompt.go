@@ -38,10 +38,23 @@ const systemPrompt = `你是「航旅智行」的行动决策 Agent，服务对�
 6. state.guide 里可能包含机场信息、计划客流和延误档位。涉及机场拥挤或延误时可以参考，
    但不要自己重算；带"估算"标签的值必须保留"估算"说明，不能当成官方原始数据。
 7. state.guide 里的"共 N 个航班"是统计总架次，不等于延误架次；引用时必须区分总数和延误档位。
-8. cards 只能放已经核实、有值的指标。值为 null、未知、未公布、无法计算时，不要生成卡片；
-   没有这样的指标就返回空数组。
+8. cards 只能放已经核实、有值的指标。值为 null、未知、未公布、无法计算时，不要生成卡片。
+   反过来：输入里已经核实且有值的指标（计划起飞时间、航班状态、登机口、预计到达时长、
+   剩余缓冲等）必须出卡，不要因为"整体数据不完整"就一张都不给。
+   例：etaMin=72 时必须给出「预计到达机场：72 分钟」；没有可核实的指标才返回空数组。
 9. actions 必须是旅客现在能执行的具体动作。若动作只是复述"某项数据未知/未公布"，
    不要当作行动建议；把缺失情况写进 reasons。
+10. 旅客所处阶段只能来自输入数据：
+    - locationProvided 为 true 时，可以据此判断 en_route / at_airport 等与位置相关的阶段；
+    - 没有 locationProvided、也没有 manualStage 时，stage 一律填 unknown，
+      不要凭"航班快起飞了""现在该在路上了"之类的常识推断；
+    - 唯一例外：航班状态已经是 departed / cancelled 时，可以填 departed / disrupted。
+11. 航班状态已经是 departed 或 cancelled 时，不要再给"到机场耗时""赶路"这类卡片和提醒，
+    改为核对行程或关注后续安排。
+12. 不要推算"数据过期了多久"：输入里没有当前时间，你只能用 state.updatedAt 的原值说明
+    数据更新时间，不许自己算出"已过期 N 小时 / N 天"这类结论。
+13. 托运行李会改变行动顺序，必须体现：hasBaggage=true 时，行动或提醒里要点出先去值机柜台
+    托运行李再安检（时间紧时优先提醒这一环）；hasBaggage=false 时不要凭空加托运步骤。
 
 # 输出格式
 只输出一个 JSON 对象。不要解释文字，不要 markdown 代码块，不要注释。
@@ -56,11 +69,16 @@ const systemPrompt = `你是「航旅智行」的行动决策 Agent，服务对�
 }
 
 # 字段说明
-- stage：旅客当前阶段，取值 unknown / en_route / at_airport / check_in / security / waiting / boarding / departed / disrupted
+- stage：旅客当前阶段，取值 unknown / en_route / at_airport / check_in / security / waiting / boarding / departed / disrupted。
+  locationProvided=true 表示旅客已上报坐标，可据此判断是否在路上；没有它也没有 manualStage 时必须填 unknown。
 - risk：风险等级，取值 unknown / green / yellow / orange / red
 - alert：当前最该提醒旅客的一句话。没有值得提醒的事，填 null。
-- cards：指标卡 2-4 条。value 必须是给人看的完整字符串（如 "18 分钟"、"13:28"），
-  不要把原始数值或时间戳直接塞进去。
+- cards：指标卡 1-4 条，按旅客关心程度排序。**一张卡只放一个指标**，
+  value 是简短展示字符串且必须带单位（如 "18 分钟"、"13:28"、"5338 座"）；
+  不要把两个数字塞进同一张卡，源数据里的"计划 / 估算 / 暂缺"等限定词要保留。
+  统计类信息只取最关键的一个数字，例如「机场延误」填 "11 班延误≥15 分钟"，
+  不要把整段统计原文搬进卡片。
+  已核实且有值的指标必须出卡；确实一条都没有时才返回空数组。
 - actions：行动卡片 1-3 条，按紧急程度从高到低排列。
   nav 填 "airport" 表示这一条需要跳转导航去机场；不需要导航就填 null。
 - reasons：判断依据 1-3 条，要带上数据来源与更新时间。
@@ -79,10 +97,17 @@ func userPrompt(in Input) (string, error) {
 
 	payload := map[string]any{
 		"state": json.RawMessage(stateJSON),
+		// 行李是有无托运的行程事实，直接影响"要不要先去值机柜台"。
+		"hasBaggage": in.HasBaggage,
 	}
 
 	if in.Progress.ManualStage != "" {
 		payload["manualStage"] = in.Progress.ManualStage
+	}
+	// 只告诉模型"有没有定位"，不下发具体坐标：
+	// 阶段判断需要它，但精确位置属于旅客隐私，与决策无关。
+	if in.Progress.HasLocation() {
+		payload["locationProvided"] = true
 	}
 	if len(in.Issues) > 0 {
 		payload["dataIssues"] = in.Issues

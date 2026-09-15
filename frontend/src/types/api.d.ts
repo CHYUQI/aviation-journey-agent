@@ -170,7 +170,7 @@ export interface components {
             /** @description 当前位置到机场的预计耗时（分钟） */
             etaMin: number | null;
             traffic: components["schemas"]["Traffic"] | null;
-            /** @description 机场内逐段文字指引，前端按数组顺序展示 */
+            /** @description 机场相关文字行（机场概况、客流、延误档位等），前端按数组顺序原样展示 */
             guide: string[];
             quality: components["schemas"]["Quality"];
             /**

@@ -142,8 +142,7 @@ func (s FlightIdentitySkill) searchFlightNumber(ctx context.Context, number stri
 	if err != nil {
 		return ResolvedFlightIdentity{}, err
 	}
-	req.Header.Set("User-Agent", eoobAirportUserAgent)
-	req.Header.Set("Accept", "application/json")
+	setEOOBHeaders(req, "application/json", eoobJSONRequest)
 	req.Header.Set("Origin", "https://www.eoob.com.cn")
 	req.Header.Set("Referer", "https://www.eoob.com.cn/hangban-zhuizong")
 

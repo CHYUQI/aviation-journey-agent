@@ -56,6 +56,12 @@ func (c *openAIClient) Chat(ctx context.Context, req Request) (Response, error) 
 	if c.baseURL == "" {
 		return Response{}, errors.New("模型端点未配置")
 	}
+	// 同进程内限制并发：并发打满时端点会长时间不响应（见 limiter.go）
+	if err := acquireCallSlot(ctx); err != nil {
+		return Response{}, err
+	}
+	defer releaseCallSlot()
+
 	if len(req.Messages) == 0 {
 		return Response{}, errors.New("模型请求缺少消息")
 	}

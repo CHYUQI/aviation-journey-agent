@@ -2,43 +2,24 @@ package skill
 
 import "testing"
 
-func TestNormalizeTime(t *testing.T) {
-	cases := []struct {
-		name string
-		raw  string
-		date string
-		want string
-	}{
-		{"完整时间直接用", "2026-09-13T13:05:00+08:00", "2026-09-13", "2026-09-13T13:05:00+08:00"},
-		{"只有钟点补日期时区", "13:05", "2026-09-13", "2026-09-13T13:05:00+08:00"},
-		{"官网的月日写法", "09月13日 08:00", "2026-09-13", "2026-09-13T08:00:00+08:00"},
-		{"带秒的钟点", "16:15:30", "2026-09-13", "2026-09-13T16:15:30+08:00"},
-		{"空字符串", "", "2026-09-13", ""},
-		{"无法解析的写法一律丢弃", "下午一点", "2026-09-13", ""},
-		{"日期非法则不拼", "13:05", "不是日期", ""},
+// TestDeriveBoardingTimes 锁住登机/关闸的推算口径：
+// 计划起飞前 40 分钟开始登机、前 15 分钟关闭登机口（与契约示例一致）。
+func TestDeriveBoardingTimes(t *testing.T) {
+	boarding, gateClose, ok := deriveBoardingTimes("2026-09-15T15:00:00+08:00")
+	if !ok {
+		t.Fatal("可解析的起飞时间应返回 ok=true")
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := normalizeTime(tc.raw, tc.date); got != tc.want {
-				t.Fatalf("normalizeTime(%q, %q) = %q, want %q", tc.raw, tc.date, got, tc.want)
-			}
-		})
+	if boarding != "2026-09-15T14:20:00+08:00" {
+		t.Fatalf("开始登机 = %s，期望 2026-09-15T14:20:00+08:00", boarding)
 	}
-}
+	if gateClose != "2026-09-15T14:45:00+08:00" {
+		t.Fatalf("登机口关闭 = %s，期望 2026-09-15T14:45:00+08:00", gateClose)
+	}
 
-func TestMapStatusText(t *testing.T) {
-	cases := map[string]string{
-		"正常":   "on_time",
-		"正点":   "on_time",
-		"延误":   "delayed",
-		"取消":   "cancelled",
-		"已起飞":  "departed",
-		"我不确定": "unknown",
-		"":     "unknown",
+	if _, _, ok := deriveBoardingTimes(""); ok {
+		t.Error("空时间不应推算")
 	}
-	for raw, want := range cases {
-		if got := mapStatusText(raw); got != want {
-			t.Fatalf("mapStatusText(%q) = %q, want %q", raw, got, want)
-		}
+	if _, _, ok := deriveBoardingTimes("不是时间"); ok {
+		t.Error("非法时间不应推算")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -195,17 +196,17 @@ func TestAirportTrafficLines(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("客流行数 = %d，期望 2", len(lines))
 	}
-	if !strings.Contains(lines[0], "当前小时计划旅客座位数 100") || !strings.Contains(lines[0], "未来24小时约 300") {
+	if !strings.Contains(lines[0], "当前小时计划旅客座位数 100 座") || !strings.Contains(lines[0], "未来 24 小时合计约 300 座") {
 		t.Fatalf("出发客流行不符合预期: %s", lines[0])
 	}
-	if !strings.Contains(lines[1], "当前小时计划旅客座位数 80") || !strings.Contains(lines[1], "未来24小时约 210") {
+	if !strings.Contains(lines[1], "当前小时计划旅客座位数 80 座") || !strings.Contains(lines[1], "未来 24 小时合计约 210 座") {
 		t.Fatalf("到达客流行不符合预期: %s", lines[1])
 	}
 }
 
 func TestFormatAirportTrafficLine_CurrentMissing(t *testing.T) {
 	line := formatAirportTrafficLine("出发", 0, 100)
-	if !strings.Contains(line, "当前小时数据暂缺") || !strings.Contains(line, "未来24小时约 100") {
+	if !strings.Contains(line, "当前小时数据暂缺") || !strings.Contains(line, "未来 24 小时合计约 100 座") {
 		t.Fatalf("当前小时无数据时的客流提示不符合预期: %s", line)
 	}
 }
@@ -228,5 +229,72 @@ func TestFormatEOOBDelayInfo(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], "1.8 分钟") || !strings.Contains(lines[1], "18.0 分钟") {
 		t.Fatalf("延误均值行不符合预期: %s", lines[1])
+	}
+}
+
+// TestSetEOOBHeaders 锁住「User-Agent 与客户端提示必须同源同版本」这条约束。
+//
+// 背景：eoob.com.cn 前面挂着 Cloudflare，响应头用 Accept-Ch/Critical-Ch
+// 点名索要 Sec-CH-UA 系列客户端提示。只声称自己是 Chrome 却不带提示，
+// 会被判定为脚本并弹 managed challenge（实测：只带 UA 5/5 被挑战，
+// 补上提示 5/5 直接拿到页面）。这里不联网，只校验请求头自洽。
+func TestSetEOOBHeaders(t *testing.T) {
+	doc, err := http.NewRequest(http.MethodGet, "https://www.eoob.com.cn/CAN", nil)
+	if err != nil {
+		t.Fatalf("构造请求失败: %v", err)
+	}
+	setEOOBHeaders(doc, "text/html", eoobDocument)
+
+	match := regexp.MustCompile(`Chrome/(\d+)\.`).FindStringSubmatch(doc.Header.Get("User-Agent"))
+	if match == nil {
+		t.Fatalf("User-Agent 里没有 Chrome 主版本号: %q", doc.Header.Get("User-Agent"))
+	}
+	if match[1] != eoobChromeVersion {
+		t.Fatalf("User-Agent 版本 %s 与 eoobChromeVersion %s 不一致 —— 版本漂移会再次被 Cloudflare 挑战",
+			match[1], eoobChromeVersion)
+	}
+	if got := doc.Header.Get("Sec-Ch-Ua"); !strings.Contains(got, `"Google Chrome";v="`+eoobChromeVersion+`"`) {
+		t.Fatalf("Sec-Ch-Ua 与 UA 版本不一致: %q", got)
+	}
+	if got := doc.Header.Get("Sec-Ch-Ua-Full-Version"); !strings.HasPrefix(got, eoobChromeVersion+".") {
+		t.Fatalf("Sec-Ch-Ua-Full-Version 与 UA 版本不一致: %q", got)
+	}
+
+	for _, header := range []string{
+		"Sec-Ch-Ua",
+		"Sec-Ch-Ua-Mobile",
+		"Sec-Ch-Ua-Platform",
+		"Sec-Ch-Ua-Full-Version",
+		"Sec-Ch-Ua-Full-Version-List",
+		"Sec-Fetch-Dest",
+		"Sec-Fetch-Mode",
+		"Sec-Fetch-Site",
+	} {
+		if doc.Header.Get(header) == "" {
+			t.Errorf("文档请求缺少客户端提示头 %s", header)
+		}
+	}
+	if doc.Header.Get("Sec-Fetch-Dest") != "document" || doc.Header.Get("Sec-Fetch-Mode") != "navigate" {
+		t.Errorf("文档请求的 Sec-Fetch-* 不匹配: dest=%q mode=%q",
+			doc.Header.Get("Sec-Fetch-Dest"), doc.Header.Get("Sec-Fetch-Mode"))
+	}
+	if doc.Header.Get("Upgrade-Insecure-Requests") != "1" {
+		t.Error("文档请求应带 Upgrade-Insecure-Requests: 1")
+	}
+
+	api, err := http.NewRequest(http.MethodGet, "https://www.eoob.com.cn/api/delaybox/CAN", nil)
+	if err != nil {
+		t.Fatalf("构造请求失败: %v", err)
+	}
+	setEOOBHeaders(api, "application/json", eoobJSONRequest)
+	if api.Header.Get("Sec-Fetch-Dest") != "empty" || api.Header.Get("Sec-Fetch-Mode") != "cors" {
+		t.Errorf("JSON 请求的 Sec-Fetch-* 不匹配: dest=%q mode=%q",
+			api.Header.Get("Sec-Fetch-Dest"), api.Header.Get("Sec-Fetch-Mode"))
+	}
+	if api.Header.Get("Sec-Ch-Ua") != doc.Header.Get("Sec-Ch-Ua") {
+		t.Error("文档请求与 JSON 请求的 Sec-Ch-Ua 应当一致")
+	}
+	if api.Header.Get("Upgrade-Insecure-Requests") != "" {
+		t.Error("JSON 请求不应带 Upgrade-Insecure-Requests")
 	}
 }

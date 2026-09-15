@@ -10,14 +10,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
 
-	"aviation-journey-agent/backend/internal/config"
 	"aviation-journey-agent/backend/internal/domain"
-	"aviation-journey-agent/backend/internal/model"
 	"aviation-journey-agent/backend/internal/skill"
 )
 
@@ -35,19 +32,6 @@ func main() {
 		from, to = strings.ToUpper(os.Args[3]), strings.ToUpper(os.Args[4])
 	}
 
-	cfg := config.Load()
-	if !cfg.Search.Configured() {
-		log.Fatal("联网检索未配置，请检查 backend/.env")
-	}
-
-	client := model.NewDashScope(model.DashScopeOptions{
-		BaseURL:     cfg.Search.BaseURL,
-		APIKey:      cfg.Search.APIKey,
-		Model:       cfg.Search.Model,
-		Timeout:     cfg.Search.Timeout,
-		Temperature: cfg.Model.Temperature,
-	})
-
 	journey := domain.Journey{
 		ID:         "debug",
 		Flights:    []domain.Flight{{Number: flightNo, Date: date, From: from, To: to}},
@@ -58,7 +42,7 @@ func main() {
 	defer cancel()
 
 	start := time.Now()
-	result, err := skill.NewFlightStatusSkill(client).Execute(ctx, skill.Query{Journey: journey})
+	result, err := skill.NewFlightStatusSkill().Execute(ctx, skill.Query{Journey: journey})
 	fmt.Printf("耗时 %s\n\n", time.Since(start).Round(time.Second))
 
 	if err != nil {

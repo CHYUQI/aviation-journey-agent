@@ -360,7 +360,7 @@ JourneySnapshot
 │   │   └── time         date-time            RFC3339，供倒计时
 │   ├── etaMin          integer | null        到机场分钟数
 │   ├── traffic         Traffic | null
-│   ├── guide           string[]              机场内逐段文字指引
+│   ├── guide           string[]              机场相关文字行（概况/客流/延误档位等）
 │   ├── quality         Quality
 │   └── updatedAt       date-time
 ├── advice          Advice                    必填
@@ -429,7 +429,7 @@ AnalysisAccepted
 
 `ManualStage` 是 `Stage` 的子集，去掉了旅客无法自行确认的 `unknown`、`departed`、`disrupted`。
 
-开放字符串（前端原样展示，不做分支）：`state.guide[]`、`advice.reasons[]`、`advice.cards[].label`、`advice.cards[].value`、`error`。
+开放字符串（前端原样展示，不做分支）：`state.guide[]`（机场概况/客流/延误档位等数据源原文）、`advice.reasons[]`、`advice.cards[].label`、`advice.cards[].value`、`error`。
 
 **兜底规则**
 

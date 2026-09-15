@@ -14,26 +14,8 @@ import (
 
 // Config 是服务的全部运行配置。
 type Config struct {
-	Addr   string
-	Model  ModelConfig
-	Search SearchConfig
-}
-
-// SearchConfig 是联网检索的配置。
-//
-// 检索必须走百炼原生端点：实测 OpenAI 兼容端点不透传 enable_search，
-// 参数被静默忽略，模型会退回"凭记忆回答"，从而编造内容。
-// BaseURL 留空表示不启用检索。
-type SearchConfig struct {
-	BaseURL string
-	APIKey  string
-	Model   string
-	Timeout time.Duration
-}
-
-// Configured 表示检索通道配置完整。
-func (s SearchConfig) Configured() bool {
-	return s.BaseURL != "" && s.APIKey != "" && s.Model != ""
+	Addr  string
+	Model ModelConfig
 }
 
 // ModelConfig 是模型服务配置。
@@ -46,6 +28,9 @@ type ModelConfig struct {
 	Name        string
 	Timeout     time.Duration
 	Temperature float64
+	// MaxConcurrency 是同进程内模型调用的并发上限。
+	// 默认 1（串行）：实测并发调用会让百炼端点长时间不响应直到超时。
+	MaxConcurrency int
 }
 
 // Configured 表示模型配置是否完整。缺配置时上层应当走降级路径，
@@ -61,18 +46,13 @@ func Load() Config {
 
 	return Config{
 		Addr: getenv("SERVER_ADDR", ":8080"),
-		Search: SearchConfig{
-			BaseURL: os.Getenv("MODEL_NATIVE_URL"),
-			APIKey:  os.Getenv("MODEL_API_KEY"),
-			Model:   getenv("MODEL_SEARCH_NAME", "qwen-plus"),
-			Timeout: getduration("MODEL_SEARCH_TIMEOUT", 60*time.Second),
-		},
 		Model: ModelConfig{
-			BaseURL:     strings.TrimRight(os.Getenv("MODEL_BASE_URL"), "/"),
-			APIKey:      os.Getenv("MODEL_API_KEY"),
-			Name:        getenv("MODEL_NAME", "qwen3-8b"),
-			Timeout:     getduration("MODEL_TIMEOUT", 45*time.Second),
-			Temperature: getfloat("MODEL_TEMPERATURE", 0.1),
+			BaseURL:        strings.TrimRight(os.Getenv("MODEL_BASE_URL"), "/"),
+			APIKey:         os.Getenv("MODEL_API_KEY"),
+			Name:           getenv("MODEL_NAME", "qwen3-8b"),
+			Timeout:        getduration("MODEL_TIMEOUT", 90*time.Second),
+			Temperature:    getfloat("MODEL_TEMPERATURE", 0.1),
+			MaxConcurrency: getint("MODEL_MAX_CONCURRENCY", 1),
 		},
 	}
 }
@@ -129,6 +109,19 @@ func getduration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return d
+}
+
+// getint 读一个整数配置，读不到或格式不对就用默认值。
+func getint(key string, fallback int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 func getfloat(key string, fallback float64) float64 {

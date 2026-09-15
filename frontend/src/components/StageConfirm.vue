@@ -15,8 +15,9 @@ const stages: { value: ManualStage; label: string }[] = [
   { value: 'boarding', label: '登机' },
 ]
 
-const { confirmStage } = useLocation()
+const { granted, error, locate, confirmStage } = useLocation()
 const pending = ref(false)
+const locating = ref(false)
 
 async function pick(stage: ManualStage) {
   if (props.disabled || pending.value) return
@@ -27,6 +28,18 @@ async function pick(stage: ManualStage) {
     pending.value = false
   }
 }
+
+// 契约 7.6/7.7：定位可用时上报坐标，后端据此算路程时间与风险；
+// 上报坐标后后端会自动解除手动确认的阶段，前端不用额外处理。
+async function reportLocation() {
+  if (props.disabled || locating.value) return
+  locating.value = true
+  try {
+    await locate(props.journeyId)
+  } finally {
+    locating.value = false
+  }
+}
 </script>
 
 <template>
@@ -35,6 +48,15 @@ async function pick(stage: ManualStage) {
       <h2>当前在哪个环节？</h2>
       <span>定位不可用时手动确认</span>
     </div>
+
+    <div class="locate-row">
+      <button class="primary" type="button" :disabled="disabled || locating" @click="reportLocation">
+        {{ locating ? '定位中…' : '上报当前位置' }}
+      </button>
+      <span v-if="error" class="form-error">{{ error }}</span>
+      <span v-else-if="granted" class="muted">已上报位置，正在重算</span>
+    </div>
+
     <div class="stage-options">
       <button
         v-for="s in stages"
