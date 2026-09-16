@@ -1,0 +1,95 @@
+@startuml
+' 图2-1 系统体系结构逻辑视图（当前实现）
+' 依据：docs/api/openapi.yaml 与当前代码（backend/internal、frontend/src）
+' 说明：图中只保留结构，各类的职责与边界见正文表 2-1
+' 插入建议：整页宽度（≥13cm）时图内字号约 8pt，可读
+
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam nodesep 20
+skinparam ranksep 34
+skinparam ArrowColor #46617A
+skinparam ArrowFontSize 12
+skinparam ArrowFontColor #2F3E4E
+skinparam componentBorderColor #1F4E79
+skinparam componentBackgroundColor #EEF4FA
+skinparam componentFontColor #10304C
+skinparam packageBorderColor #1F4E79
+skinparam packageFontColor #1F4E79
+skinparam noteBackgroundColor #FFF7E0
+skinparam noteBorderColor #B99A4A
+skinparam noteFontSize 12
+
+title 图2-1 系统体系结构逻辑视图（当前实现）
+
+package "① 客户端层（浏览器）" as L1 {
+  component "Vue 3 SPA\nDashboard.vue\nuseJourneyStore / useLocation" as Client
+  component "api/journey.ts\ncreateJourney / getState\nupdateLocation / createStream" as ApiTs
+}
+
+package "② 接口层（Gin，/api/v1）" as L2 {
+  component "api.JourneyHandler\nCreate / UpdateLocation\nState / Stream" as Handler
+  component "SSE 适配\nretry 5000\nsnapshot · heartbeat" as SSEProto
+}
+
+package "③ 运行时编排层（单个 Go 进程）" as L3 {
+  component "runtime.Runtime\n编排取数与决策\n快照读写 · 订阅推送" as Rt
+  component "并发与刷新策略\nbusy 去重不排队\n超时 180s · 每行程 2min" as RtPolicy
+  component "api.RegisterRoutes\n4 条路由" as Routes
+  note bottom of RtPolicy
+    位置或阶段更新后立即重算并推送，
+    不等周期刷新；finish 先存快照再广播
+  end note
+}
+
+package "④ Agent 与技能层" as L4 {
+  component "data.Agent\nBuildState：取数并评估质量" as DataAgent
+  component "advice.Agent\nEvaluate：模型建议 + 风险下限" as AdviceAgent
+  component "skill.Registry\nRegister / Query" as Registry
+  component "数据技能\nFlightIdentity · FlightStatus\nAirportStatus · RouteETA" as Skills
+  component "model.Client\nmodel.OpenAI" as ModelClient
+  note bottom of DataAgent
+    没有观测值的字段一律 null；
+    单个 Skill 失败只记 issue
+  end note
+  note bottom of AdviceAgent
+    关键数据缺失 → risk=unknown
+    并过滤带 Nav 的行动
+  end note
+}
+
+package "⑤ 存储与推送层（进程内）" as L5 {
+  component "store.MemoryStore\njourneys · snapshots\nprogress" as Ms
+  component "runtime.SSEHub\nsubs · 缓冲 4\n非阻塞 Publish" as Hub
+}
+
+package "⑥ 外部能力（进程外）" as L6 {
+  component "EOOB 聚合站点\n航班搜索 / 状态 JSON\n机场页 + delaybox" as EOOB
+  component "模型服务\nOpenAI 兼容 API" as LLM
+  component "高德 App / 网页\namapuri:// 与 amapuri.com" as Amap
+  component "mockserver :8081\n开发期夹具" as Mock
+}
+
+' ===== 协作关系 =====
+Client --> ApiTs : 提交行程 / 上报定位
+ApiTs --> Routes : HTTP JSON
+ApiTs --> SSEProto : EventSource
+Routes --> Handler : 路由分发
+Handler --> Rt : 调用 Runtime
+Rt --> DataAgent : BuildState(ctx, Input)
+Rt --> AdviceAgent : decide() 后 Evaluate
+Rt --> Ms : Save / Get 快照与进度
+Rt --> Hub : Publish(id, snapshot)
+Hub --> Handler : snapshot channel
+DataAgent --> Registry : Query(ctx, query)
+Registry --> Skills : Execute(ctx, query)
+AdviceAgent --> ModelClient : Chat(ctx, req)
+Skills --> EOOB : HTTPS
+ModelClient --> LLM : HTTPS
+Client --> Amap : 用户点击后打开
+Mock .up.> Routes : 开发联调替代后端
+
+@enduml

@@ -1,0 +1,40 @@
+@startuml
+' 图4-6 系统部署图
+' 教科书画法：device 结点 + 结点上部署的制品（artifact）+ 结点间通信协议
+
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 80
+skinparam ranksep 170
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 12
+skinparam nodeBackgroundColor #FFFFFF
+skinparam nodeBorderColor #1F1F1F
+skinparam nodeFontColor #111111
+skinparam componentBackgroundColor #FFFFFF
+skinparam componentBorderColor #1F1F1F
+skinparam componentFontColor #111111
+
+left to right direction
+
+title 图4-6 系统部署图
+
+node "旅客终端：PC / 手机浏览器" as Client <<device>> {
+  artifact "前端应用\nVue 3 + TypeScript\n单页应用" as FE
+}
+
+node "应用服务器" as Server <<device>> {
+  artifact "后端应用\nGo 单二进制\nGin API / Runtime\nDataAgent / AdviceAgent\nSSE" as BE
+}
+
+FE --> BE : «HTTP / HTTPS»
+BE ..> FE : «SSE»
+
+legend bottom
+  «HTTP / HTTPS»：浏览器调用 REST API，提交行程、上报位置与阶段、查询状态与建议；
+  «SSE»：服务器把最新行程快照实时推送给浏览器，不可用时界面回退为定时刷新。
+endlegend
+
+@enduml

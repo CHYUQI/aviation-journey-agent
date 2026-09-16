@@ -2,12 +2,9 @@ package skill
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -124,73 +121,28 @@ func flightIdentityResult(identity ResolvedFlightIdentity) Result {
 }
 
 func (s FlightIdentitySkill) searchFlightNumber(ctx context.Context, number string) (ResolvedFlightIdentity, error) {
-	client := s.Client
-	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second}
-	}
-
-	endpoint, err := url.Parse(eoobFlightNumberSearchURL)
+	matches, err := fetchFlightNumberMatches(ctx, s.Client, number)
 	if err != nil {
 		return ResolvedFlightIdentity{}, err
 	}
-	params := endpoint.Query()
-	params.Set("s", number)
-	params.Set("lang", "zh")
-	endpoint.RawQuery = params.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
-	if err != nil {
-		return ResolvedFlightIdentity{}, err
-	}
-	setEOOBHeaders(req, "application/json", eoobJSONRequest)
-	req.Header.Set("Origin", "https://www.eoob.com.cn")
-	req.Header.Set("Referer", "https://www.eoob.com.cn/hangban-zhuizong")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return ResolvedFlightIdentity{}, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, eoobSearchMaxBytes))
-	if err != nil {
-		return ResolvedFlightIdentity{}, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return ResolvedFlightIdentity{}, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-
-	var payload struct {
-		Matches []struct {
-			FlightNumber      string `json:"flightnumber"`
-			IATAFrom          string `json:"iata_from"`
-			IATATo            string `json:"iata_to"`
-			NextDepartureDate string `json:"next_departure_date"`
-		} `json:"matches"`
-	}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return ResolvedFlightIdentity{}, fmt.Errorf("解析搜索结果失败: %w", err)
-	}
-
-	// 同一个航班号可能对应多条航线（例如去程/回程/经停段）。
-	// 只有唯一航线时自动补全；多条候选一律不猜，交给调用方提供 date/from/to。
+	// 同一个航班号可能对应多条航段（去程/回程/经停段），这里按航段去重。
+	// 只有唯一航段时自动补全；多条候选一律不猜，交给调用方提供 date/from/to。
 	candidates := map[string]ResolvedFlightIdentity{}
-	for _, match := range payload.Matches {
-		matchedNumber := strings.ToUpper(strings.TrimSpace(match.FlightNumber))
-		if matchedNumber != number {
+	for _, m := range matches {
+		if m.Number != strings.ToUpper(strings.TrimSpace(number)) {
 			continue
 		}
-		date := strings.TrimSpace(match.NextDepartureDate)
-		from := strings.ToUpper(strings.TrimSpace(match.IATAFrom))
-		to := strings.ToUpper(strings.TrimSpace(match.IATATo))
-		if date == "" || !validAirportIATA(from) || !validAirportIATA(to) {
+		if m.NextDepartureDate == "" || !validAirportIATA(m.IATAFrom) || !validAirportIATA(m.IATATo) {
 			continue
 		}
 
-		key := from + "-" + to
+		key := m.IATAFrom + "-" + m.IATATo
 		existing, ok := candidates[key]
-		if !ok || date < existing.Date {
-			candidates[key] = ResolvedFlightIdentity{Number: matchedNumber, Date: date, From: from, To: to}
+		if !ok || m.NextDepartureDate < existing.Date {
+			candidates[key] = ResolvedFlightIdentity{
+				Number: m.Number, Date: m.NextDepartureDate, From: m.IATAFrom, To: m.IATATo,
+			}
 		}
 	}
 

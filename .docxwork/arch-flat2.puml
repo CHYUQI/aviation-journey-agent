@@ -1,0 +1,34 @@
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 15
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 34
+skinparam ranksep 48
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 12
+skinparam rectangleMinimumWidth 190
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #1F1F1F
+skinparam rectangleFontColor #111111
+left to right direction
+
+title 图2-1 系统体系结构图
+
+rectangle "用户界面层\n\n行程创建\n状态与建议展示\n位置 / 阶段上报" as L1
+rectangle "业务逻辑层\n\n行程编排\n数据感知与风险分析\n快照与推送" as L2
+rectangle "数据层\n\n行程、航段与进度\n状态与快照" as L3
+rectangle "设备接口层\n\n聚合数据源\n大模型\n导航" as L4
+rectangle "外部系统\n\n航班与机场数据\n大模型服务\n导航应用或网页" as L5
+
+L1 --> L2
+L2 --> L3
+L2 --> L4
+L4 --> L5
+
+legend bottom
+  层间按数据流向连接：界面 → 业务逻辑 → 数据 / 接口 → 外部系统。
+  状态界面通过 SSE 接收快照；业务逻辑层统一编排，失败只降级不中断；
+  外部数据只经接口层进入；课程版为进程内存储，重启后数据丢失。
+endlegend
+@enduml

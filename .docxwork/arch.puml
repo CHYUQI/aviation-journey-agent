@@ -1,0 +1,136 @@
+@startuml
+/' 图2-1 系统体系结构逻辑视图（当前实现）
+   依据：docs/api/openapi.yaml + 当前代码（backend/internal、frontend/src）
+   渲染建议：横向整页或整页 1 张，确保图内字号缩放后 ≥ 7pt '/'
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam nodesep 14
+skinparam ranksep 26
+skinparam ArrowColor #46617A
+skinparam ArrowFontSize 12
+skinparam ArrowFontColor #2F3E4E
+
+skinparam componentBorderColor #1F4E79
+skinparam componentBackgroundColor #EEF4FA
+skinparam componentFontColor #10304C
+skinparam packageBorderColor #1F4E79
+skinparam packageFontColor #1F4E79
+skinparam noteBackgroundColor #FFF7E0
+skinparam noteBorderColor #B99A4A
+skinparam noteFontSize 12
+
+title 图2-1 系统体系结构逻辑视图（当前实现）
+
+' ============ ① 客户端层 ============
+package "① 客户端层（浏览器 · Vue 3 + TypeScript SPA，独立 Vite 工程）" as L1 {
+  component "Dashboard.vue\n创建行程表单；idle/processing/ready/failed 三态渲染\nfailed 用 lastReady 保留已有内容" as Dashboard
+  component "useJourneyStore（Pinia）\nsnapshot · lastReady · connected · fallbackActive\nload/stop/apply/pollState；断线 20s 后每 15s 轮询 /state" as JStore
+  component "useLocation\n浏览器 Geolocation；六类手动阶段降级入口" as ULoc
+  component "展示与交互组件\nStatusBar · FreshnessBar · MetricsRow · Timeline\nActionCardList · NavigateButton · StageConfirm · ToastHost" as WComp
+  component "api/journey.ts（axios + EventSource，baseURL /api/v1）\ncreateJourney / getState / updateLocation / createStream" as ApiTs
+}
+
+' ============ ② 接口层 ============
+package "② 接口层（Gin HTTP，前缀 /api/v1）" as L2 {
+  component "api.JourneyHandler\nCreate(c) · UpdateLocation(c) · State(c) · Stream(c)" as Handler
+  component "api.RegisterRoutes\nPOST /journey · POST /journey/{id}/location\nGET /journey/{id}/state · GET /journey/{id}/stream" as Routes
+  component "SSE 协议适配\nretry: 5000 · event: snapshot / heartbeat(15s)\nCache-Control: no-cache · X-Accel-Buffering: no" as SSEProto
+  note right of Handler
+    400 参数错误 / 404 行程不存在 /
+    500 未预期错误；分析失败不返回 5xx，
+    而是产出 status=failed 的快照
+  end note
+}
+
+' ============ ③ 运行时编排层 ============
+package "③ 运行时编排层（单个 Go 进程，进程内编排）" as L3 {
+  component "runtime.Runtime\n- store / data / advice / hub / busy: sync.Map\n+ CreateJourney · ApplyLocation · Recalculate\n+ GetSnapshot · Subscribe · StartPeriodicRefresh\n- decide · finish · publishProcessing · analyzeAsync · previousSnapshot" as Rt
+  component "编排与并发策略\nbusy.LoadOrStore 去重：同行程并发重算直接返回当前快照，不排队\n单次分析超时 180s；StartPeriodicRefresh 15s tick\n每行程刷新间隔 ≥2min；已起飞/取消或出发日期已过则跳过" as RtPolicy
+  note right of RtPolicy
+    位置或阶段更新后立即重算，
+    并立即经 SSEHub 推送，不等周期刷新；
+    finish 先 SaveSnapshot 再 Publish
+  end note
+}
+
+' ============ ④ Agent 与技能层 ============
+package "④ Agent 与技能层（同一 Go 进程）" as L4 {
+  component "data.Agent\n+ BuildState(ctx, Input{Journey, Progress}) → Result{State, Journey, Issues}\n缺失字段 → Registry.Query → applyObservations（类型/枚举/RFC3339 校验）\n→ assessQuality → complete / degraded / unknown" as DataAgent
+  component "advice.Agent\n+ Evaluate(ctx, Input{State, Progress, Issues, AirportIATA, HasBaggage}) → Advice\n- evaluate / - degraded / enforceRiskFloor 风险下限" as AdviceAgent
+  component "skill.Registry\n+ Register(s) · + Query(ctx, query)\n一个技能支持多字段只调用一次；无技能支持则记 issue" as Registry
+  component "skill.Skill（接口）\n+ Name() · + Supports(field) · + Execute(ctx, query)" as SkillIface
+  component "FlightIdentitySkill\nEOOB 航班号搜索 JSON（5min 缓存）\n补全缺失的日期与航线" as SkIdentity
+  component "FlightStatusSkill\nEOOB 航班状态 JSON\n航班状态 / 时间轴 / 登机口" as SkStatus
+  component "AirportStatusSkill\nEOOB 机场页 HTML + /api/delaybox/{IATA}\nUA 与 Sec-CH-UA 版本同源；20s 超时" as SkAirport
+  component "RouteETASkill\nHaversine 直线距离 ×1.3 ÷ 30km/h\n本地估算，confidence=low，traffic 保持 null" as SkEta
+  component "model.Client（接口）\n+ Chat(ctx, req) (Response, error)" as ModelClient
+  component "model.OpenAI\nOpenAI 兼容端点（百炼 / vLLM / Ollama）" as ModelOpenAI
+  note bottom of DataAgent
+    没有观测值的字段一律 null，不用默认值填充；
+    单个 Skill 失败只追加 issue，不伪造观测值
+  end note
+  note bottom of AdviceAgent
+    未配置模型 / 调用失败 / 枚举非法 → degraded（risk=unknown）；
+    关键数据缺失 → risk=unknown 并过滤带 Nav 的行动；
+    不执行改签、支付、叫车
+  end note
+}
+
+' ============ ⑤ 存储与推送层 ============
+package "⑤ 存储与推送层（进程内，无数据库）" as L5 {
+  component "store.MemoryStore\n- mu: sync.RWMutex · journeys · snapshots · progress\n+ SaveJourney/GetJourney · SaveSnapshot/GetSnapshot\n+ SaveProgress/GetProgress · ListJourneyIDs" as Ms
+  component "runtime.SSEHub\n- mu · subs: map[journeyId]map[chan]struct\n+ Subscribe(id) → (channel, cancel) · + Publish(id, snapshot)\n缓冲深度 4；慢订阅者丢弃该帧" as Hub
+  note right of Ms
+    进程重启数据即丢失，不支持多实例；
+    快照是 REST /state 与 SSE 的唯一数据源
+  end note
+}
+
+' ============ ⑥ 外部能力 ============
+package "⑥ 外部能力（进程外，v1 唯一数据来源）" as L6 {
+  component "EOOB 聚合站点\napil.eoob.com：航班号搜索 JSON、航班状态 JSON\nwww.eoob.com.cn：机场页 HTML、/api/delaybox/{IATA}" as EOOB
+  component "模型服务\nOpenAI 兼容 API；未配置时整链路仍可运行" as LLM
+  component "高德 App / 网页\namapuri://route/plan 与 uri.amap.com\n仅用户点击后打开，不采集轨迹" as Amap
+  component "mockserver（开发期夹具，:8081）\n正常 / MU9999 延误+登机口变更 / FAIL 分析失败" as Mock
+}
+
+' ================= 关系 =================
+Dashboard --> ApiTs : submit / retry
+JStore --> ApiTs : getState / createStream
+ULoc --> ApiTs : updateLocation(lat,lng) 或 (stage)
+WComp --> JStore : 只渲染 snapshot，不做业务计算
+WComp --> Amap : NavigateButton.open\nApp 优先，1.2s 回退 Web
+
+ApiTs --> Handler : HTTP JSON（POST /journey、POST /location、GET /state）
+ApiTs --> SSEProto : EventSource 订阅 /stream
+SSEProto --> Handler
+Routes --> Handler
+
+Handler --> Rt : 调用 Runtime，不含 Agent 规则
+Rt --> DataAgent : BuildState(ctx, Input)
+Rt --> AdviceAgent : decide() 后 Evaluate(ctx, Input)\n状态无实质变化时复用上一版建议
+Rt --> Ms : Save/Get Journey · Progress · Snapshot
+Rt --> Hub : Publish(id, snapshot)
+Hub --> Handler : snapshot channel → event: snapshot
+
+DataAgent --> Registry : Query(ctx, query)
+Registry --> SkillIface : Execute(ctx, query)
+SkillIface <|.. SkIdentity
+SkillIface <|.. SkStatus
+SkillIface <|.. SkAirport
+SkillIface <|.. SkEta
+SkIdentity --> EOOB : HTTPS JSON
+SkStatus --> EOOB : HTTPS JSON
+SkAirport --> EOOB : HTTPS HTML / JSON
+AdviceAgent --> ModelClient : Chat(ctx, req)
+ModelOpenAI ..|> ModelClient
+ModelClient --> LLM : HTTPS
+SkEta ..> ULoc : 使用前端上报的坐标\n（经 Runtime → DataAgent 传入）
+
+Mock .up.> Handler : 开发联调时替代真实后端
+
+@enduml

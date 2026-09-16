@@ -1,0 +1,104 @@
+@startuml
+' 图4-6 数据设计类图
+' 类与字段严格取自 docs/api/openapi.yaml 的 schemas 定义，不新增字段
+
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam classBackgroundColor #FFFFFF
+skinparam classBorderColor #1F1F1F
+skinparam classFontColor #111111
+skinparam ArrowColor #333333
+skinparam nodesep 45
+skinparam ranksep 70
+
+hide circle
+top to bottom direction
+
+title 图4-6 数据设计类图
+
+class "JourneySnapshot 行程快照" as Snapshot <<data>> {
+  status : AnalysisStatus
+  error : String
+}
+
+class "Journey 行程" as Journey <<data>> {
+  «key» id : String
+  hasBaggage : boolean
+}
+
+class "State 行程状态" as State <<data>> {
+  flightStatus : FlightStatus
+  gate : String
+  etaMin : Integer
+  traffic : Traffic
+  guide : String[]
+  quality : Quality
+  updatedAt : DateTime
+}
+
+class "Advice 行动建议" as Advice <<data>> {
+  stage : Stage
+  risk : Risk
+  alert : String
+  reasons : String[]
+}
+
+class "Flight 航段" as Flight <<data>> {
+  number : String
+  date : Date
+  from : String
+  to : String
+}
+
+class "TimelineNode 时间轴节点" as TimelineNode <<data>> {
+  label : String
+  time : DateTime
+}
+
+class "Card 指标卡" as Card <<data>> {
+  label : String
+  value : String
+}
+
+class "Action 行动卡片" as Action <<data>> {
+  «key» id : String
+  title : String
+  detail : String
+}
+
+class "Nav 导航信息" as Nav <<data>> {
+  app : String
+  web : String
+}
+
+' ===== 组合关系与多重度（标签为承载该子对象的字段名）=====
+Snapshot "1" -- "1" Journey : journey
+Snapshot "1" -- "1" State : state
+Snapshot "1" -- "1" Advice : advice
+
+Journey "1" -- "1..*" Flight : flights
+State "1" -- "0..*" TimelineNode : timeline
+Advice "1" -- "0..*" Card : cards
+Advice "1" -- "0..*" Action : actions
+Action "1" -- "0..1" Nav : nav
+
+' ===== 固定各列横向顺序 =====
+Journey -[hidden]right- State
+State -[hidden]right- Advice
+Flight -[hidden]right- TimelineNode
+TimelineNode -[hidden]right- Card
+Card -[hidden]right- Action
+
+legend bottom
+  <b>可空字段</b>（无依据时返回 null，不返回默认值）：error、gate、etaMin、traffic、alert、nav
+  <b>枚举取值域</b>
+  AnalysisStatus = processing | ready | failed
+  FlightStatus = unknown | scheduled | on_time | delayed | boarding | departed | cancelled | diverted
+  Quality = complete | degraded | unknown　　Traffic = unknown | light | moderate | heavy | severe
+  Stage = unknown | en_route | at_airport | check_in | security | waiting | boarding | departed | disrupted
+  Risk = unknown | green | yellow | orange | red
+endlegend
+
+@enduml

@@ -1,0 +1,5 @@
+@startuml
+component "航班与机场数据来源" as X1
+component "大模型服务" as X2
+X1 - X2
+@enduml

@@ -1,0 +1,164 @@
+@startuml
+' 图2-1 系统体系结构图（详细分层视图）
+' 参考分层包 + boundary / control / entity / interface 的表达方式
+
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam linetype polyline
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam packageTitleAlignment left
+skinparam nodesep 30
+skinparam ranksep 48
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 12
+skinparam classBackgroundColor #FFFFFF
+skinparam classBorderColor #1F1F1F
+skinparam classFontColor #111111
+skinparam packageBackgroundColor #FFFFFF
+skinparam packageBorderColor #1F1F1F
+skinparam packageFontColor #111111
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #1F1F1F
+skinparam rectangleFontColor #111111
+
+hide circle
+top to bottom direction
+
+title 图2-1 系统体系结构图
+
+' ==================== 用户界面层 ====================
+package "用户界面层" as L1 {
+  class "行程创建界面类" as UI1 <<boundary>> {
+    +录入航班与行李信息()
+    +提交行程()
+  }
+  class "行程状态界面类" as UI2 <<boundary>> {
+    +展示状态与时间轴()
+    +展示行动建议()
+  }
+  class "定位与阶段确认界面类" as UI3 <<boundary>> {
+    +上报当前位置()
+    +确认所处阶段()
+  }
+
+  UI1 -[hidden]right- UI2
+  UI2 -[hidden]right- UI3
+}
+
+' ==================== 业务逻辑层 ====================
+package "业务逻辑层" as L2 {
+  class "行程编排控制类" as B1 <<control>> {
+    -行程标识
+    +创建行程()
+    +更新位置或阶段()
+    +触发重算()
+  }
+  class "数据感知控制类" as B2 <<control>> {
+    +获取航班与机场数据()
+    +校验观测数据()
+    +评估数据质量()
+  }
+  class "行动决策控制类" as B3 <<control>> {
+    +分析阶段与风险()
+    +生成行动建议()
+    +执行风险下限()
+  }
+  class "快照与推送控制类" as B4 <<control>> {
+    +保存完整快照()
+    +广播完整快照()
+  }
+
+  B1 -[hidden]right- B2
+  B2 -[hidden]right- B3
+  B3 -[hidden]right- B4
+
+}
+
+' ==================== 数据层 ====================
+package "数据层" as L3 {
+  class "行程实体类" as E1 <<entity>> {
+    -行程标识
+    -是否托运行李
+  }
+  class "航段实体类" as E2 <<entity>> {
+    -航班号
+    -出行日期
+    -出发机场
+    -到达机场
+  }
+  class "行程快照实体类" as E5 <<entity>> {
+    -分析状态
+    -生成时间
+    -数据质量
+  }
+  class "行程状态实体类" as E3 <<entity>> {
+    -航班状态
+    -时间轴节点
+    -预计路程时长
+    -数据质量
+  }
+  class "位置进度实体类" as E4 <<entity>> {
+    -经度
+    -纬度
+    -手动确认阶段
+  }
+
+  E1 -[hidden]right- E2
+  E5 -[hidden]right- E3
+  E3 -[hidden]right- E4
+  E1 -[hidden]down- E5
+  E2 -[hidden]down- E3
+
+  E1 *-- E2
+  E5 *-- E3
+  E5 *-- E4
+}
+
+' ==================== 设备接口层 ====================
+package "设备接口层" as L4 {
+  class "聚合数据源接口" as I1 <<interface>> {
+    +获取航班状态()
+    +获取机场概况()
+  }
+  class "大模型接口" as I2 <<interface>> {
+    +生成行动建议()
+  }
+  class "地图导航接口" as I3 <<interface>> {
+    +打开导航应用()
+    +打开导航网页()
+  }
+
+  I1 -[hidden]right- I2
+  I2 -[hidden]right- I3
+}
+
+' ==================== 外部系统 ====================
+package "外部系统" as L5 {
+  class "航班与机场数据来源" as X1 <<external>>
+  class "大模型服务" as X2 <<external>>
+  class "地图导航应用或网页" as X3 <<external>>
+
+  X1 -[hidden]right- X2
+  X2 -[hidden]right- X3
+}
+
+' ==================== 层间关系 ====================
+L1 <--> L2 : 命令 / 服务
+L2 <--> L3 : 数据操作 / 数据
+B2 --> I1 : 设备接口调用
+B3 --> I2 : 调用
+L4 --> L5 : HTTPS / 跳转
+
+I1 ..> X1 : 访问
+I2 ..> X2 : 调用
+I3 ..> X3 : 跳转
+
+legend bottom
+  <b>体系结构约束</b>
+  用户界面层只负责展示与上报；业务逻辑层统一编排，先取数后决策；
+  外部数据只经接口层进入，失败只降级不中断；课程版采用进程内存储。
+endlegend
+
+@enduml

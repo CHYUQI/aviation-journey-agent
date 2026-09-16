@@ -1,0 +1,80 @@
+@startuml
+' 图4-6 系统部署图（标准 UML 部署视图）
+' 部署节点表示运行环境，制品表示部署单元，连接线表示通信路径
+
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 36
+skinparam ranksep 54
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 12
+skinparam nodeBackgroundColor #FFFFFF
+skinparam nodeBorderColor #1F1F1F
+skinparam nodeFontColor #111111
+skinparam artifactBackgroundColor #FFFFFF
+skinparam artifactBorderColor #1F1F1F
+skinparam artifactFontColor #111111
+skinparam componentBackgroundColor #FFFFFF
+skinparam componentBorderColor #1F1F1F
+skinparam componentFontColor #111111
+skinparam cloudBackgroundColor #FFFFFF
+skinparam cloudBorderColor #1F1F1F
+skinparam cloudFontColor #111111
+
+left to right direction
+
+title 图4-6 系统部署图
+
+' ==================== 客户端部署节点 ====================
+node "旅客终端" <<device>> as ClientDevice {
+  node "Web 浏览器" <<executionEnvironment>> as Browser {
+    artifact "Vue3 + TypeScript\n单页应用静态资源" as Frontend
+  }
+}
+
+' ==================== 后端部署节点 ====================
+node "应用服务器" <<device>> as AppServer {
+  node "Go 服务进程" <<executionEnvironment>> as GoRuntime {
+    artifact "航空旅程 Agent\nGo 单体可执行程序" as BackendArtifact
+
+    component "HTTP API / Gin 路由" as API
+    component "数据感知 Agent" as DataAgent
+    component "行动决策 Agent" as AdviceAgent
+    component "SSE 实时推送" as SSE
+    component "进程内快照存储" as SnapshotStore
+
+    API -[hidden]right- DataAgent
+    DataAgent -[hidden]right- AdviceAgent
+    AdviceAgent -[hidden]right- SSE
+    API -[hidden]down- SnapshotStore
+  }
+}
+
+' ==================== 外部系统部署节点 ====================
+cloud "EOOB 聚合数据源" <<external system>> as EOOB
+node "大模型服务" <<external system>> as LLM
+node "地图导航应用或网页" <<external system>> as MapService
+
+' ==================== 部署通信关系 ====================
+Browser --> API : HTTPS / REST API
+SSE --> Browser : SSE / 实时快照
+DataAgent --> EOOB : HTTPS\n航班与机场数据
+AdviceAgent ..> LLM : HTTPS / 可选\n行动建议生成
+Browser --> MapService : App URI / Web 回退\n导航跳转
+
+API --> DataAgent : 编排
+API --> AdviceAgent : 编排
+API --> SnapshotStore : 读写快照
+DataAgent --> SnapshotStore : 写入 WorldState
+AdviceAgent --> SnapshotStore : 写入 Advice
+
+legend bottom
+  <b>部署约束</b>
+  前端与后端分离部署；后端由一个 Go 单体进程承载 API、DataAgent、AdviceAgent 和 SSE；
+  系统不部署数据库、Redis、消息队列或独立模型服务；快照保存在后端进程内，重启后丢失；
+  地图导航由浏览器跳转到应用或网页，后端不执行改签、支付、叫车或导航轨迹采集。
+endlegend
+
+@enduml

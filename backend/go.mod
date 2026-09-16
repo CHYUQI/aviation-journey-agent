@@ -1,4 +1,4 @@
-module aviation-journey-agent/backend
+ module aviation-journey-agent/backend
 
 go 1.22
 

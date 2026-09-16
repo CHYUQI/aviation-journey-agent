@@ -70,12 +70,79 @@ func (s *FlightStatusSkill) Execute(ctx context.Context, query Query) (Result, e
 		return result, nil
 	}
 
-	// 接口没返回可用字段：如实说明，不再回退航司官网（浏览器路径已整体移除）。
-	// 常见原因：该日期没有这个航班、航线写错，或 EOOB 还没收录这条动态。
-	return Result{Issues: []string{
-		fmt.Sprintf("EOOB 状态接口没有返回 %s（%s %s→%s）的可用动态",
-			strings.ToUpper(strings.TrimSpace(flight.Number)), flight.Date, flight.From, flight.To),
-	}}, nil
+	// 直查没命中。先看这个航班号在 EOOB 登记了哪些航段：
+	// 经停航班是按段存的（例如 CZ6656 存成 TSN→YIW、YIW→SWA），
+	// 旅客填整段就必然查不到 —— 这时按"出发地相同的那一段"重试一次。
+	segments, segmentErr := lookupFlightSegments(ctx, flight.Number)
+	if segmentErr == nil {
+		if segment, ok := pickSegment(segments, flight); ok {
+			retry := flight
+			retry.From, retry.To = segment.From, segment.To
+			if result, matched := s.fetchEOOBStatusAPI(ctx, retry); matched {
+				result.Issues = append(result.Issues, fmt.Sprintf(
+					"%s 是经停航班，已按 %s→%s 段查询（整段 %s→%s 在 EOOB 没有直达记录）",
+					strings.ToUpper(strings.TrimSpace(flight.Number)), segment.From, segment.To,
+					strings.ToUpper(strings.TrimSpace(flight.From)), strings.ToUpper(strings.TrimSpace(flight.To))))
+				return result, nil
+			}
+		}
+	}
+
+	// 仍然查不到：把"航段 + 最近可查日期"写进说明，旅客才知道该改日期还是改航线。
+	return Result{Issues: []string{flightLookupMissMessage(flight, segments, segmentErr)}}, nil
+}
+
+// pickSegment 在航班号的多个航段里挑出最贴近旅客输入的那一段。
+//
+// 优先"出发地相同"（整段行程的第一段），其次"目的地相同"（最后一段）；
+// 只有一个航段时才直接用它 —— 不做没有依据的替换。
+func pickSegment(segments []ResolvedFlightIdentity, flight domain.Flight) (ResolvedFlightIdentity, bool) {
+	from := strings.ToUpper(strings.TrimSpace(flight.From))
+	to := strings.ToUpper(strings.TrimSpace(flight.To))
+
+	for _, segment := range segments {
+		if segment.From == from && segment.To != to {
+			return segment, true
+		}
+	}
+	for _, segment := range segments {
+		if segment.To == to && segment.From != from {
+			return segment, true
+		}
+	}
+	if len(segments) == 1 {
+		return segments[0], true
+	}
+	return ResolvedFlightIdentity{}, false
+}
+
+// flightLookupMissMessage 把"查不到"讲清楚：是日期没覆盖，还是经停航班按段存。
+func flightLookupMissMessage(flight domain.Flight, segments []ResolvedFlightIdentity, segmentErr error) string {
+	number := strings.ToUpper(strings.TrimSpace(flight.Number))
+	from := strings.ToUpper(strings.TrimSpace(flight.From))
+	to := strings.ToUpper(strings.TrimSpace(flight.To))
+	base := fmt.Sprintf("EOOB 没有 %s 在 %s（%s→%s）的记录", number, flight.Date, from, to)
+
+	if segmentErr != nil || len(segments) == 0 {
+		return base
+	}
+
+	parts := make([]string, 0, len(segments))
+	nearest := ""
+	for _, segment := range segments {
+		parts = append(parts, segment.From+"→"+segment.To)
+		if segment.Date != "" && (nearest == "" || segment.Date < nearest) {
+			nearest = segment.Date
+		}
+	}
+	detail := "；该航班航段：" + strings.Join(parts, "、")
+	if nearest != "" {
+		detail += "，最近可查日期 " + nearest
+	}
+	if len(segments) > 1 {
+		detail += "（经停航班请按单段填写出发/到达）"
+	}
+	return base + detail
 }
 
 type eoobStatusPayload struct {

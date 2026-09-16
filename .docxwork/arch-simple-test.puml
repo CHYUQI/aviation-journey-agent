@@ -1,0 +1,71 @@
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 15
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 24
+skinparam ranksep 42
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 12
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #1F1F1F
+skinparam rectangleFontColor #111111
+skinparam packageBorderColor #1F1F1F
+skinparam packageFontColor #111111
+
+title 图2-1 系统体系结构图
+
+top to bottom direction
+
+package "用户界面层" as L1 {
+  rectangle "行程创建界面" as UI1
+  rectangle "行程状态界面" as UI2
+  rectangle "定位与阶段确认界面" as UI3
+}
+
+package "业务逻辑层" as L2 {
+  rectangle "行程编排" as B1
+  rectangle "数据感知" as B2
+  rectangle "行动决策" as B3
+  rectangle "快照与推送" as B4
+}
+
+package "数据层" as L3 {
+  rectangle "行程与位置数据" as D1
+  rectangle "状态与快照数据" as D2
+}
+
+package "设备接口层" as L4 {
+  rectangle "聚合数据源接口" as I1
+  rectangle "大模型接口" as I2
+  rectangle "地图导航接口" as I3
+}
+
+package "外部系统" as L5 {
+  rectangle "航班与机场数据来源" as X1
+  rectangle "大模型服务" as X2
+  rectangle "地图导航应用或网页" as X3
+}
+
+L1 --> L2 : 调用、上报
+L2 --> L3 : 读写业务数据
+L2 --> L4 : 获取数据与建议
+L4 --> L5 : HTTPS / 跳转
+
+note right of L1
+  状态界面通过 SSE 订阅快照更新
+end note
+note right of L2
+  唯一编排者：先取数、后决策；
+  失败只降级不中断；不执行改签、支付、叫车
+end note
+note right of L3
+  课程版为进程内存储，重启即丢失
+end note
+note right of L4
+  外部数据只经接口层进入；
+  未配置大模型时系统仍可运行
+end note
+
+@enduml

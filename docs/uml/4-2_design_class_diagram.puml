@@ -1,0 +1,90 @@
+@startuml
+' 图4-5 系统设计类图
+' 关系依据第2章分析类图：UI -> Gin路由 -> 两个Agent，Gin路由统一读写行程状态
+
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam packageTitleAlignment left
+skinparam nodesep 34
+skinparam ranksep 54
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 12
+skinparam classBackgroundColor #FFFFFF
+skinparam classBorderColor #1F1F1F
+skinparam classFontColor #111111
+skinparam packageBackgroundColor #FFFFFF
+skinparam packageBorderColor #1F1F1F
+skinparam packageFontColor #111111
+
+hide circle
+top to bottom direction
+
+title 图4-5 系统设计类图
+
+' ==================== 边界类 ====================
+package "边界类" as BoundaryLayer {
+  class "UI" as UI <<boundary>> {
+    +请求信息()
+    +展示结果()
+    +展示导航入口()
+    +响应导航点击()
+  }
+}
+
+' ==================== 控制类 ====================
+package "控制类" as ControlLayer {
+  class "数据感知 Agent" as DataAgent <<control>> {
+    +获取数据()
+    +校验数据()
+    +生成状态()
+  }
+
+  class "Gin 路由" as GinRoute <<control>> {
+    +处理请求()
+    +编排分析()
+    +管理快照()
+  }
+
+  class "行动决策 Agent" as AdviceAgent <<control>> {
+    +分析状态()
+    +生成建议()
+    +评估风险()
+  }
+
+  DataAgent -[hidden]right- GinRoute
+  GinRoute -[hidden]right- AdviceAgent
+}
+
+' ==================== 实体类 ====================
+package "实体类" as EntityLayer {
+  class "行程状态" as JourneyState <<entity>> {
+    -行程信息
+    -世界状态
+    -行动建议
+    -数据质量
+    -生成时间
+    +读取快照()
+    +保存快照()
+  }
+}
+
+' ==================== 正确的类间关系 ====================
+UI --> GinRoute : 请求与结果返回
+GinRoute -left-> DataAgent
+GinRoute -right-> AdviceAgent
+GinRoute --> JourneyState : 读取 / 保存快照
+
+' ==================== 设计约束 ====================
+legend bottom
+  <b>设计约束</b>
+  Gin 路由是运行时编排入口；数据感知 Agent 只获取和处理数据，生成 WorldState；
+  行动决策 Agent 只消费 WorldState，不直接访问外部数据源；
+  Gin 路由向左调用数据感知 Agent 获取状态，向右调用行动决策 Agent 获取建议；
+  Gin 路由向下统一读取和保存行程状态快照。
+endlegend
+
+@enduml
