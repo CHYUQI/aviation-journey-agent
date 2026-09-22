@@ -146,12 +146,20 @@ func (r *Runtime) decide(
 		return previous.Advice
 	}
 
+	// 用快照时间戳作为"现在"：它与推给前端的 updatedAt 是同一个服务端时钟，
+	// 也是模型判断"还来不来得及"的唯一依据。
+	now := time.Now()
+	if ts, err := time.Parse(time.RFC3339, result.State.UpdatedAt); err == nil {
+		now = ts
+	}
+
 	next := r.advice.Evaluate(ctx, adviceagent.Input{
 		State:       result.State,
 		Progress:    progress,
 		Issues:      result.Issues,
 		AirportIATA: departureAirport(journey),
 		HasBaggage:  journey.HasBaggage,
+		Now:         now,
 	})
 
 	// 刷新时模型/数据源临时故障，本轮建议会变成空壳（risk=unknown、没有卡片也没有行动）。

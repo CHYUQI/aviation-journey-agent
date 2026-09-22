@@ -1,10 +1,15 @@
 package advice
 
 import (
+	"fmt"
 	"strings"
 
 	"aviation-journey-agent/backend/internal/domain"
 )
+
+// comfortableMarginMinutes 是"时间明显充裕"的门槛：
+// 距登机口关闭还有 4 小时以上时，即使算不出路程也不该给 unknown。
+const comfortableMarginMinutes = 240
 
 // modelAdvice 是模型输出的形状。
 //
@@ -134,8 +139,8 @@ func RiskConstraintFor(state domain.State, stage string) RiskConstraint {
 //   - 完全判断不了（连航班状态和时间都没有）→ unknown，并撤掉高强度行动。
 //
 // 这条不能只写在 prompt 里 —— 模型可能忽略，也可能误判。
-func enforceRiskFloor(result *domain.Advice, state domain.State) {
-	constraint := RiskConstraintFor(state, result.Stage)
+func enforceRiskFloor(result *domain.Advice, in Input) {
+	constraint := RiskConstraintFor(in.State, result.Stage)
 	if len(constraint.Missing) == 0 {
 		return
 	}
@@ -145,6 +150,18 @@ func enforceRiskFloor(result *domain.Advice, state domain.State) {
 			result.Risk = domain.RiskYellow
 			result.Reasons = append(result.Reasons,
 				"缺少"+strings.Join(constraint.Missing, "、")+"，不能判定为安全，风险降级为 yellow")
+			return
+		}
+
+		// 时间明显充裕时，Unknown 过于保守：它不是"有风险"，但也谈不上安全，
+		// 按契约允许的下限给 yellow，并把缺什么写清楚。
+		if result.Risk == domain.RiskUnknown {
+			if minutes, ok := comfortableMargin(in); ok {
+				result.Risk = domain.RiskYellow
+				result.Reasons = append(result.Reasons,
+					fmt.Sprintf("距登机口关闭还有 %d 分钟，时间看起来充裕；但缺少%s，无法给出安全结论，按 yellow 处理",
+						minutes, strings.Join(constraint.Missing, "、")))
+			}
 		}
 		return
 	}
@@ -185,6 +202,15 @@ func isUnknownText(value string) bool {
 
 func actionRestatesMissing(action domain.Action) bool {
 	return isUnknownText(action.Title) || isUnknownText(action.Detail)
+}
+
+// comfortableMargin 返回"距登机口关闭"是否明显充裕，以及具体分钟数。
+func comfortableMargin(in Input) (int, bool) {
+	facts := ComputeTimeFacts(in.State, domain.JourneyProgress{}, nil, in.Now)
+	if facts.MinutesUntilGateClose == nil || *facts.MinutesUntilGateClose < comfortableMarginMinutes {
+		return 0, false
+	}
+	return *facts.MinutesUntilGateClose, true
 }
 
 func cleanStringPtr(s *string) *string {

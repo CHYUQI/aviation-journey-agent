@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"aviation-journey-agent/backend/internal/domain"
 	"aviation-journey-agent/backend/internal/model"
@@ -337,5 +338,85 @@ func TestUserPromptCarriesBaggage(t *testing.T) {
 	}
 	if !strings.Contains(withoutBaggage, `"hasBaggage": false`) {
 		t.Fatalf("不带行李时也应明确下发 hasBaggage=false：\n%s", withoutBaggage)
+	}
+}
+
+// TestUserPromptCarriesTimeFacts 锁住"时间事实必须下发"：
+// 模型看不到当前时间和缓冲量，就会出现"起飞还有 8 小时却提示时间非常紧张"。
+func TestUserPromptCarriesTimeFacts(t *testing.T) {
+	now := time.Date(2026, 9, 13, 12, 36, 0, 0, time.FixedZone("CST", 8*3600))
+	state := readyState()
+
+	prompt, err := userPrompt(Input{
+		State:    state,
+		Progress: domain.JourneyProgress{Location: &domain.Coordinate{Lat: 31.23, Lng: 121.47}},
+		Now:      now,
+	})
+	if err != nil {
+		t.Fatalf("构造 prompt 失败: %v", err)
+	}
+
+	for _, want := range []string{
+		`"serverNow": "2026-09-13T12:36:00+08:00"`,
+		`"minutesUntilGateClose"`,
+		`"bufferMin"`,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt 应包含时间事实 %s：\n%s", want, prompt)
+		}
+	}
+}
+
+func marginState() domain.State {
+	state := domain.NewState()
+	state.FlightStatus = domain.FlightStatusScheduled
+	state.Timeline = []domain.TimelineNode{
+		{Label: "登机口关闭", Time: "2026-09-22T18:35:00+08:00"},
+		{Label: "起飞", Time: "2026-09-22T18:50:00+08:00"},
+	}
+	return state
+}
+
+// TestEvaluate_ComfortableMarginUpgradesUnknownToYellow：
+// 没有定位、算不出缓冲，但距登机口关闭还有 8 小时多 —— 不该是 unknown（那是"什么都判断不了"），
+// 也不该是 green（缺路程时间），按契约允许的下限给 yellow。
+func TestEvaluate_ComfortableMarginUpgradesUnknownToYellow(t *testing.T) {
+	client := &fakeClient{content: `{
+		"stage": "unknown",
+		"risk": "unknown",
+		"alert": null,
+		"cards": [],
+		"actions": [],
+		"reasons": []
+	}`}
+	now := time.Date(2026, 9, 22, 10, 9, 0, 0, time.FixedZone("CST", 8*3600))
+
+	got := NewAgent(client).Evaluate(context.Background(), Input{State: marginState(), Now: now})
+
+	if got.Risk != domain.RiskYellow {
+		t.Fatalf("时间充裕但缺路程时间时应为 yellow，实际 %s", got.Risk)
+	}
+	if !hasReason(got.Reasons, "时间看起来充裕") {
+		t.Fatalf("reasons 应说明为什么按 yellow 处理: %v", got.Reasons)
+	}
+}
+
+// TestEvaluate_TightMarginKeepsUnknownWithoutETA：时间并不充裕时不要硬升档，
+// 该 unknown 就 unknown。
+func TestEvaluate_TightMarginKeepsUnknownWithoutETA(t *testing.T) {
+	client := &fakeClient{content: `{
+		"stage": "unknown",
+		"risk": "unknown",
+		"alert": null,
+		"cards": [],
+		"actions": [],
+		"reasons": []
+	}`}
+	now := time.Date(2026, 9, 22, 18, 0, 0, 0, time.FixedZone("CST", 8*3600))
+
+	got := NewAgent(client).Evaluate(context.Background(), Input{State: marginState(), Now: now})
+
+	if got.Risk != domain.RiskUnknown {
+		t.Fatalf("只剩 35 分钟又没有路程时间时应保持 unknown，实际 %s", got.Risk)
 	}
 }

@@ -30,9 +30,10 @@ const systemPrompt = `你是「航旅智行」的行动决策 Agent，服务对�
 # 你必须遵守
 1. 只使用输入里给出的数据。输入里是 null、空数组或没有提到的信息，就是"不知道"，
    不要猜测、不要补全、不要用常识或经验代替数据。
-2. 关键数据缺失时不能给 green 这种"很安全"的结论，但也不要一律给 unknown：
-   只要还能基于已有数据做有限判断（例如航班状态正常、离起飞还有时间，只是缺实时路况或登机口），
-   就给 "yellow" 并在 reasons 里写清缺什么；只有连航班状态和起飞时间都没有、完全判断不了时才给 "unknown"。
+2. 时间够不够看 bufferMin（后端已经算好），不要凭感觉：
+   bufferMin 充足（>= 90 分钟）时，不要因为"路况未知 / 登机口未公布"这类精度不足就给 yellow，
+   把缺失写进 reasons 即可；bufferMin 为 null 或很小时才不允许给 green。
+   连航班状态和起飞时间都没有、完全没有判断依据时，才给 unknown。
 3. 不要编造时间、地点、航班号、登机口、排队时长。这些只能来自输入。
 4. 不能替旅客执行任何操作。改签、支付、叫车、订票都不在你的能力范围内，
    你只能给出建议，由旅客自己决定。
@@ -53,10 +54,15 @@ const systemPrompt = `你是「航旅智行」的行动决策 Agent，服务对�
     - 唯一例外：航班状态已经是 departed / cancelled 时，可以填 departed / disrupted。
 11. 航班状态已经是 departed 或 cancelled 时，不要再给"到机场耗时""赶路"这类卡片和提醒，
     改为核对行程或关注后续安排。
-12. 不要推算"数据过期了多久"：输入里没有当前时间，你只能用 state.updatedAt 的原值说明
-    数据更新时间，不许自己算出"已过期 N 小时 / N 天"这类结论。
+12. 输入里的 serverNow 就是当前时间，可以拿它和 timeline / bufferMin 判断时间是否充裕；
+    但不要推算"数据过期了多久"，只按 state.updatedAt 的原值说明更新时间。
 13. 托运行李会改变行动顺序，必须体现：hasBaggage=true 时，行动或提醒里要点出先去值机柜台
     托运行李再安检（时间紧时优先提醒这一环）；hasBaggage=false 时不要凭空加托运步骤。
+14. risk 按 bufferMin（到达机场时距登机口关闭还剩多少分钟）判档：
+    bufferMin >= 90 且航班正常 → green；30~90 → yellow；0~30 → orange；< 0 → red。
+    bufferMin 为 null（例如没有定位）时不得给 green；航班已起飞/取消按规则 11 处理。
+    minutesUntilGateClose 是"从现在到登机口关闭"的总时长、不含路程；
+    没有 bufferMin 时不要把它写成"剩余缓冲"，要写成"距登机口关闭 X 分钟"。
 
 # 输出格式
 只输出一个 JSON 对象。不要解释文字，不要 markdown 代码块，不要注释。
@@ -101,6 +107,17 @@ func userPrompt(in Input) (string, error) {
 		"state": json.RawMessage(stateJSON),
 		// 行李是有无托运的行程事实，直接影响"要不要先去值机柜台"。
 		"hasBaggage": in.HasBaggage,
+	}
+
+	// 时间是判断"来不来得及"的必要输入：serverNow 是服务端当前时刻，
+	// minutesUntilGateClose / bufferMin 由代码算好，模型只做判断不做减法。
+	facts := ComputeTimeFacts(in.State, in.Progress, in.State.ETAMin, in.Now)
+	payload["serverNow"] = facts.ServerNow
+	if facts.MinutesUntilGateClose != nil {
+		payload["minutesUntilGateClose"] = *facts.MinutesUntilGateClose
+	}
+	if facts.BufferMin != nil {
+		payload["bufferMin"] = *facts.BufferMin
 	}
 
 	if in.Progress.ManualStage != "" {

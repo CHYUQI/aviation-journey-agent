@@ -2,6 +2,7 @@ package advice
 
 import (
 	"context"
+	"time"
 
 	"aviation-journey-agent/backend/internal/domain"
 	"aviation-journey-agent/backend/internal/model"
@@ -18,6 +19,9 @@ type Input struct {
 	// HasBaggage 表示旅客是否携带托运行李。
 	// 带托运要预留值机/托运时间，不带则可以直接安检 —— 这会改变行动建议。
 	HasBaggage bool
+	// Now 是本次决策的服务端时间（快照时间戳）。
+	// 模型必须靠它判断"还来不来得及"，所以显式给出去，而不是让它读不到时间瞎猜。
+	Now time.Time
 }
 
 // Agent 根据行程状态生成行动建议。
@@ -45,7 +49,7 @@ func (a *Agent) Evaluate(ctx context.Context, in Input) domain.Advice {
 	}
 
 	// 最后一道防线：数据不足时不允许给出"安全"结论
-	enforceRiskFloor(&result, in.State)
+	enforceRiskFloor(&result, in)
 
 	return result
 }
