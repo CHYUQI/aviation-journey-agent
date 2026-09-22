@@ -22,8 +22,7 @@
 | 环境 | 地址 | 说明 |
 |---|---|---|
 | 真实链路 | `http://localhost:8080` | Gin + DataAgent + AdviceAgent |
-| 联调 mock | `http://localhost:8081` | 固定夹具，不调用模型与外部数据源 |
-| 前端开发 | `http://localhost:5173` | Vite 代理 `/api` 到上面之一 |
+| 前端开发 | `http://localhost:5173` | Vite 代理 `/api` 到真实链路 |
 
 统一前缀 `/api/v1`。
 
@@ -554,21 +553,13 @@ lastAlert = snap.advice.alert
 ## 10. 本地联调
 
 ```bash
-cd backend && go run ./cmd/server          # 真实链路 :8080
-cd backend && go run ./cmd/mockserver      # 固定夹具 :8081
-cd frontend && npm run dev                 # :5173
+cd backend && go run ./cmd/server          # 真实链路 :8080（需先配置 backend/.env）
+cd frontend && npm ci && npm run dev       # :5173
 ```
 
-mock 用航班号切换场景：
-
-| 航班号 | 场景 | 结果 |
-|---|---|---|
-| 任意（如 CA1234） | 正常 | `ready`，`yellow`，带导航行动 |
-| MU9999 | 延误 + 登机口变更 | `ready`，`orange`，额外"联系航司"行动 |
-| FAIL | 模型失败 | `failed`，带 error 文案 |
-
-mock 先返回 `processing`，2 秒后切换为 `ready` / `failed`，用于验证加载态与 SSE 推送。
-mock 同样支持 `{ "stage": "..." }` 的手动确认，收到后会把 `advice.stage` 改为确认值。
+开发期只有真实链路：前端 Vite 把 `/api` 全部代理到后端 `http://localhost:8080`。
+`backend/.env` 不随仓库分发，需从 `backend/.env.example` 复制并填 `MODEL_API_KEY`；
+不配置时模型走降级路径，`risk` 会是 `unknown` 且没有卡片与行动。
 
 ---
 
@@ -590,7 +581,7 @@ mock 同样支持 `{ "stage": "..." }` 的手动确认，收到后会把 `advice
 
 ```bash
 cd frontend
-npm i -D openapi-typescript   # 首次
+npm ci                        # 首次安装依赖
 npm run gen:api               # 生成 src/types/api.d.ts
 ```
 

@@ -193,8 +193,6 @@ Sec-CH-UA 系列客户端提示。只声称自己是 Chrome 却不带这些提�
 - 把模拟数据作为**运行时**数据源
 - 自动改签、自动支付、自动叫车
 
-> 允许 `backend/cmd/mockserver` 这类**开发期**夹具：它只用于前端联调，不参与真实链路。
-
 ---
 
 ## 6. 数据结构约束（防止再次膨胀）
@@ -237,7 +235,6 @@ npm run gen:api        # 之后 git diff 必须为空，否则说明类型没提
 
 | 情况 | 处理 |
 |---|---|
-| 契约和 mock 对不上 | **以契约为准**，改 mock |
 | 契约和代码对不上 | **以契约为准**，改代码 |
 | 契约里没写的东西 | **先问，不要自己发明接口或字段** |
 | 不知道该加什么字段 | 停下来问，不要猜 |
@@ -257,9 +254,6 @@ npm run gen:api        # 之后 git diff 必须为空，否则说明类型没提
 | 前端类型别名 | `frontend/src/types/index.ts` |
 | 生成类型 | `frontend/src/types/api.d.ts`（勿手改） |
 | 生成命令 | `cd frontend && npm run gen:api` |
-| 假后端 | `cd backend && go run ./cmd/mockserver`（:8081） |
 | 真后端 | `cd backend && go run ./cmd/server`（:8080） |
-| 前端开发 | `cd frontend; $env:MOCK_API=1; npm run dev`（:5173） |
+| 前端开发 | `cd frontend && npm ci && npm run dev`（:5173） |
 | 项目计划 | `projectplan.md` |
-
-**mock 场景开关**（用航班号切）：任意航班号 = 正常；`MU9999` = 延误 + 登机口变更；`FAIL` = 分析失败。

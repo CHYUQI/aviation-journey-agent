@@ -1,9 +1,0 @@
-@startuml
-package "设备接口层" as L4 {
-class "聚合数据源接口" as I1 <<interface>> {
- +获取航班状态()
-}
-}
-component "航班与机场数据来源" as X1
-I1 -- X1
-@enduml

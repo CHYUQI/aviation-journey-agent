@@ -20,11 +20,13 @@
 
 ```powershell
 cd backend
-copy .env.example .env      # 填入 MODEL_API_KEY
+copy .env.example .env      # 必须：填入 MODEL_API_KEY
 go run ./cmd/modelcheck "你好"    # 验证模型能连通
 ```
 
-`.env` 已被 gitignore，不会进版本库。
+`.env` 已被 gitignore，不会进版本库，也**不会随 clone 分发**：每个人拉下项目后都必须自己
+从 `.env.example` 复制一份并填 `MODEL_API_KEY`。不配置也能启动，但模型会走降级路径，
+界面显示 `risk = unknown`、没有卡片和行动 —— 这通常就是"别人拉下来界面不一样"的原因。
 
 `.env` 的读取不依赖启动目录：服务会从当前目录向上找到项目里的 `backend/.env`，
 所以在 `backend/`、`backend/cmd/server/` 或仓库根目录下启动都能读到同一份配置。
@@ -39,22 +41,11 @@ go run ./cmd/server          # :8080
 
 # 终端 2：前端
 cd frontend
+npm ci                       # 首次必须：node_modules 不进版本库
 npm run dev                  # :5173，/api 代理到 :8080
 ```
 
 没有 API key 也能启动：Agent 会走降级路径，返回 `risk = unknown` 并在依据里说明原因。
-
-### 3. 前端不依赖后端时
-
-```powershell
-cd backend
-go run ./cmd/mockserver      # :8081
-```
-
-```powershell
-cd frontend
-$env:MOCK_API=1; npm run dev
-```
 
 ## 接口契约
 
@@ -77,7 +68,6 @@ npm run gen:api
 | `go run ./cmd/modelcheck "你好"` | 验证模型端点、key、模型名是否可用 |
 | `go run ./cmd/modelcheck -json "输出 JSON"` | 验证 JSON 模式 |
 | `go run ./cmd/skillcheck CZ3101 2026-09-13` | 跑一次航班技能（EOOB 状态接口），打印观测值与问题 |
-| `go run ./cmd/mockserver` | 前端联调用的假后端 |
 
 ## 已知限制
 

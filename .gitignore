@@ -23,3 +23,9 @@ backend/.env.local
 # Runtime data
 backend/data/runtime/
 *.log
+
+# 文档与脚本临时产物
+.docxwork/
+__pycache__/
+*.pyc
+~$*.docx

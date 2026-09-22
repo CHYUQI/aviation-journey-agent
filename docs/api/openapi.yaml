@@ -14,10 +14,8 @@ info:
     - 枚举取值见 components/schemas，前端对每个枚举都必须有兜底分支。
 
 servers:
-  - url: http://localhost:8080
-    description: 真实链路（Gin + 两个 Agent）
-  - url: http://localhost:8081
-    description: 前端联调 mock（cmd/mockserver）
+  - url: http://localhost:8080/api/v1
+    description: 真实链路（Gin + DataAgent + AdviceAgent），统一前缀 /api/v1
 
 tags:
   - name: Journey
