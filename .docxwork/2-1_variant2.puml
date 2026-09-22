@@ -117,11 +117,13 @@ UI1 -[hidden]right- UI2
 UI2 -[hidden]right- UI3
 
 B1 -[hidden]right- B2
-B2 -[hidden]right- I1
-I1 -[hidden]right- B3
-B3 -[hidden]right- I2
-I2 -[hidden]right- B4
-B4 -[hidden]right- I3
+B2 -[hidden]right- B3
+B3 -[hidden]right- B4
+B2 -[hidden]down- I1
+B3 -[hidden]down- I2
+B4 -[hidden]down- I3
+I1 -[hidden]right- I2
+I2 -[hidden]right- I3
 
 E1 -[hidden]right- E2
 E2 -[hidden]right- E5

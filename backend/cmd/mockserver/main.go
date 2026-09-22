@@ -231,9 +231,11 @@ func readySnapshot(
 
 	hasLocation := progress.HasLocation()
 
-	// 没有定位就算不出路程，相关字段保持 null，风险降级为 unknown
+	// 没有定位就算不出路程，相关字段保持 null。
+	// 注意口径：缺一项 ≠ 什么都不知道 —— 航班状态和起飞时间都在，
+	// 只压到 yellow（与后端的 enforceRiskFloor 一致），不是 unknown。
 	if !hasLocation {
-		risk = domain.RiskUnknown
+		risk = domain.RiskYellow
 	}
 
 	state := domain.NewState()

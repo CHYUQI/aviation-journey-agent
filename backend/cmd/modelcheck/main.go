@@ -29,8 +29,13 @@ func main() {
 	flag.Parse()
 
 	cfg := config.Load()
+	if cfg.EnvFile != "" {
+		log.Printf("配置来源：%s", cfg.EnvFile)
+	}
 	if !cfg.Model.Configured() {
-		log.Fatal("模型未配置：请把 backend/.env.example 复制为 backend/.env，并填写 MODEL_BASE_URL / MODEL_API_KEY / MODEL_NAME")
+		log.Fatalf("模型未配置：缺少 %s。请把 backend/.env.example 复制为 backend/.env 并填写，"+
+			"也可以用 %s 显式指定 .env 路径",
+			strings.Join(cfg.Model.MissingFields(), " / "), config.EnvFileEnvVar)
 	}
 
 	prompt := "你好，请用一句话说明你能做什么"

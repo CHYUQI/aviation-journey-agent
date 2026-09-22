@@ -99,13 +99,78 @@ func TestEvaluate_MissingETACannotClaimGreen(t *testing.T) {
 
 	got := NewAgent(client).Evaluate(context.Background(), Input{State: state, AirportIATA: "PVG"})
 
-	if got.Risk != domain.RiskUnknown {
-		t.Fatalf("关键数据缺失时必须降级为 unknown，实际 %s", got.Risk)
-	}
-	if len(got.Actions) != 0 {
-		t.Fatalf("降级后不应保留高强度行动，实际 %d 条", len(got.Actions))
+	// 缺路程时间但航班状态、起飞时间都有：还能做有限判断 → 压到 yellow，不是 unknown
+	if got.Risk != domain.RiskYellow {
+		t.Fatalf("缺失路程时间时应降级为 yellow，实际 %s", got.Risk)
 	}
 	if !hasReason(got.Reasons, "路程时间") {
+		t.Fatalf("reasons 应说明降级原因: %v", got.Reasons)
+	}
+	if len(got.Actions) == 0 {
+		t.Fatal("yellow 仍可给出行动（例如先出发、开导航确认路况），不应被清空")
+	}
+}
+
+// TestRiskConstraintFor 锁住两级约束：缺一点 ≠ 什么都不知道。
+func TestRiskConstraintFor(t *testing.T) {
+	full := readyState()
+
+	t.Run("数据齐全时无约束", func(t *testing.T) {
+		if c := RiskConstraintFor(full, domain.StageEnRoute); len(c.Missing) != 0 {
+			t.Fatalf("数据齐全不应有约束，实际 %+v", c)
+		}
+	})
+
+	t.Run("只缺路程时间：不得 green，但不必 unknown", func(t *testing.T) {
+		state := full
+		state.ETAMin = nil
+		c := RiskConstraintFor(state, domain.StageEnRoute)
+		if c.Unknown {
+			t.Fatal("航班状态与起飞时间都在时，不应要求 unknown")
+		}
+		if !strings.Contains(strings.Join(c.Missing, "、"), "路程时间") {
+			t.Fatalf("应指出缺少路程时间，实际 %v", c.Missing)
+		}
+	})
+
+	t.Run("只缺航班状态：不得 green", func(t *testing.T) {
+		state := full
+		state.FlightStatus = domain.FlightStatusUnknown
+		if c := RiskConstraintFor(state, domain.StageEnRoute); c.Unknown {
+			t.Fatalf("还有起飞时间可判断，不应要求 unknown：%+v", c)
+		}
+	})
+
+	t.Run("航班状态与时间轴都缺：只能 unknown", func(t *testing.T) {
+		state := domain.NewState()
+		c := RiskConstraintFor(state, domain.StageUnknown)
+		if !c.Unknown {
+			t.Fatalf("完全无法判断时应要求 unknown：%+v", c)
+		}
+	})
+}
+
+// TestEvaluate_NoFlightDataAtAllIsUnknown：连航班状态和时间都没有时，
+// 即使模型给了 yellow，也必须压成 unknown 并撤掉高强度行动。
+func TestEvaluate_NoFlightDataAtAllIsUnknown(t *testing.T) {
+	client := &fakeClient{content: `{
+		"stage": "unknown",
+		"risk": "yellow",
+		"alert": null,
+		"cards": [],
+		"actions": [{"id": "leave_now", "title": "出发", "detail": "现在走", "nav": "airport"}],
+		"reasons": []
+	}`}
+
+	got := NewAgent(client).Evaluate(context.Background(), Input{State: domain.NewState(), AirportIATA: "PVG"})
+
+	if got.Risk != domain.RiskUnknown {
+		t.Fatalf("完全无数据时应为 unknown，实际 %s", got.Risk)
+	}
+	if len(got.Actions) != 0 {
+		t.Fatalf("unknown 时不应保留高强度行动，实际 %d 条", len(got.Actions))
+	}
+	if !hasReason(got.Reasons, "无法判断风险") {
 		t.Fatalf("reasons 应说明降级原因: %v", got.Reasons)
 	}
 }

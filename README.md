@@ -26,6 +26,10 @@ go run ./cmd/modelcheck "你好"    # 验证模型能连通
 
 `.env` 已被 gitignore，不会进版本库。
 
+`.env` 的读取不依赖启动目录：服务会从当前目录向上找到项目里的 `backend/.env`，
+所以在 `backend/`、`backend/cmd/server/` 或仓库根目录下启动都能读到同一份配置。
+要指定别的位置，用环境变量 `AJA_ENV_FILE` 指向 `.env` 即可。
+
 ### 2. 运行
 
 ```powershell

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,9 @@ const refreshInterval = 15 * time.Second
 
 func main() {
 	cfg := config.Load()
+	if cfg.EnvFile != "" {
+		log.Printf("配置来源：%s", cfg.EnvFile)
+	}
 	// 模型调用并发上限：默认串行，避免并发打爆端点导致 45s+ 超时（见 internal/model/limiter.go）
 	model.SetMaxConcurrency(cfg.Model.MaxConcurrency)
 
@@ -59,7 +63,9 @@ func main() {
 // 服务照常启动 —— 这样没有 key 的同学也能跑通整条链路。
 func newModelClient(cfg config.Config) model.Client {
 	if !cfg.Model.Configured() {
-		log.Println("提示：模型未配置。复制 backend/.env.example 为 backend/.env 并填写 MODEL_API_KEY 即可启用。")
+		log.Printf("提示：模型未配置（缺少 %s）。复制 backend/.env.example 为 backend/.env 并填写即可启用；"+
+			".env 的读取不依赖启动目录，也可以用 %s 显式指定路径。",
+			strings.Join(cfg.Model.MissingFields(), " / "), config.EnvFileEnvVar)
 		return nil
 	}
 

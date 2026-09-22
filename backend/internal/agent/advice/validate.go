@@ -87,12 +87,21 @@ func (m modelAdvice) valid() bool {
 	return stageValues[m.Stage] && riskValues[m.Risk]
 }
 
-// CriticalDataMissing 返回判断风险所必需、但当前缺失的数据说明。
+// RiskConstraint 描述"关键数据缺失"对风险等级的约束。
 //
-// 判断哪些数据算"关键"要看阶段：
-//   - 还在路上时，"到机场要多久"是判断来不来得及的必要输入；
-//   - 已经进了机场，"登机与起飞时间"才是。
-func CriticalDataMissing(state domain.State, stage string) []string {
+// 分两级，避免把"缺一点"和"什么都不知道"混为一谈：
+//   - Unknown = false：还能做有限判断，只要求不得给 green（最高 yellow）；
+//   - Unknown = true ：连航班状态和起飞时间都没有，完全判断不了，只能 unknown。
+type RiskConstraint struct {
+	Missing []string
+	Unknown bool
+}
+
+// RiskConstraintFor 计算当前状态对风险等级的约束。
+//
+// 判断哪些数据算"关键"要看阶段：还在路上时"到机场要多久"是必要输入；
+// 已经进了机场时，"登机与起飞时间"才是。
+func RiskConstraintFor(state domain.State, stage string) RiskConstraint {
 	missing := make([]string, 0, 3)
 
 	if state.FlightStatus == domain.FlightStatusUnknown {
@@ -107,22 +116,42 @@ func CriticalDataMissing(state domain.State, stage string) []string {
 		}
 	}
 
-	return missing
+	if len(missing) == 0 {
+		return RiskConstraint{}
+	}
+
+	// 航班状态和起飞时间都没有：没有任何判断依据，只能 unknown。
+	noFlightStatus := state.FlightStatus == domain.FlightStatusUnknown
+	noTimeline := len(state.Timeline) == 0
+	return RiskConstraint{Missing: missing, Unknown: noFlightStatus && noTimeline}
 }
 
 // enforceRiskFloor 是代码级的硬约束：关键数据缺失时不允许给出"安全"结论。
 //
+// 契约的原话是"关键数据缺失时 risk 必须为 unknown 或至少 yellow"——
+// 所以缺失不等于"必须 unknown"：
+//   - 还能判断（知道航班状态、知道起飞时间，只是缺路况/登机口）→ 压到 yellow；
+//   - 完全判断不了（连航班状态和时间都没有）→ unknown，并撤掉高强度行动。
+//
 // 这条不能只写在 prompt 里 —— 模型可能忽略，也可能误判。
-// 契约里写明"关键数据缺失不得返回绿色"，这里负责把它兜住。
 func enforceRiskFloor(result *domain.Advice, state domain.State) {
-	missing := CriticalDataMissing(state, result.Stage)
-	if len(missing) == 0 {
+	constraint := RiskConstraintFor(state, result.Stage)
+	if len(constraint.Missing) == 0 {
+		return
+	}
+
+	if !constraint.Unknown {
+		if result.Risk == domain.RiskGreen {
+			result.Risk = domain.RiskYellow
+			result.Reasons = append(result.Reasons,
+				"缺少"+strings.Join(constraint.Missing, "、")+"，不能判定为安全，风险降级为 yellow")
+		}
 		return
 	}
 
 	if result.Risk != domain.RiskUnknown {
 		result.Reasons = append(result.Reasons,
-			"缺少"+strings.Join(missing, "、")+"，已把风险降级为 unknown")
+			"缺少"+strings.Join(constraint.Missing, "、")+"，无法判断风险，已降级为 unknown")
 	}
 	result.Risk = domain.RiskUnknown
 
