@@ -29,9 +29,31 @@ type Runtime struct {
 	data   *dataagent.Agent
 	advice *adviceagent.Agent
 	hub    *SSEHub
-	// busy 标记正在分析中的行程。
+	// recalcStates 是每个行程的重算状态，保证同一行程的重算串行。
 	// 模型调用慢的时候，周期刷新会和上一轮撞上，用它能避免任务越积越多。
-	busy sync.Map
+	recalcStates sync.Map // id -> *recalcState
+	// adviceInputs 记录上一版建议是用什么输入算出来的（见 sameAdviceInputs）。
+	adviceInputs sync.Map // id -> adviceInputs
+}
+
+// recalcState 是单个行程的重算状态。
+//
+// running 表示当前是否有一轮分析在跑；dirty 表示跑的这一轮开始之后
+// 又来了新的重算请求 —— 这些请求不能丢，必须在当前轮结束后补跑一次，
+// 否则旅客上报的位置或阶段会停在旧快照里。
+type recalcState struct {
+	mu      sync.Mutex
+	running bool
+	dirty   bool
+}
+
+func (r *Runtime) recalcStateFor(id string) *recalcState {
+	if v, ok := r.recalcStates.Load(id); ok {
+		return v.(*recalcState)
+	}
+	created := &recalcState{}
+	actual, _ := r.recalcStates.LoadOrStore(id, created)
+	return actual.(*recalcState)
 }
 
 func New(s *store.MemoryStore, d *dataagent.Agent, a *adviceagent.Agent, hub *SSEHub) *Runtime {
@@ -77,17 +99,45 @@ func (r *Runtime) ApplyLocation(id string, req domain.UpdateLocationRequest) err
 
 // Recalculate 跑一次完整分析。
 //
-// 同一行程同一时刻只跑一次：周期刷新撞上正在进行的分析时直接返回当前快照，
-// 不排队等待。模型调用可能几十秒，排队会让任务越积越多。
+// 同一行程同一时刻只跑一轮：撞上正在进行的分析时不排队，而是记一个 dirty 标记，
+// 由正在跑的那一轮结束后补跑一次 —— 合并连续上报、又不会把任何一次上报丢掉。
 //
 // 分析失败不返回 error，而是产出一份 status = failed 的快照：
 // 前端需要的是一个能渲染的结果，而不是一个 500。
 func (r *Runtime) Recalculate(ctx context.Context, id string) (domain.JourneySnapshot, error) {
-	if _, running := r.busy.LoadOrStore(id, struct{}{}); running {
+	state := r.recalcStateFor(id)
+
+	state.mu.Lock()
+	if state.running {
+		state.dirty = true
+		state.mu.Unlock()
 		return r.store.GetSnapshot(id)
 	}
-	defer r.busy.Delete(id)
+	state.running = true
+	state.mu.Unlock()
 
+	var (
+		snapshot domain.JourneySnapshot
+		err      error
+	)
+	for {
+		snapshot, err = r.recalculateOnce(ctx, id)
+
+		state.mu.Lock()
+		// 只有在"没有新请求"或"这一轮已经超时"时才收工
+		if !state.dirty || ctx.Err() != nil {
+			state.dirty = false
+			state.running = false
+			state.mu.Unlock()
+			return snapshot, err
+		}
+		state.dirty = false
+		state.mu.Unlock()
+	}
+}
+
+// recalculateOnce 是一轮完整的"取数 + 决策 + 落库 + 推送"。
+func (r *Runtime) recalculateOnce(ctx context.Context, id string) (domain.JourneySnapshot, error) {
 	journey, err := r.store.GetJourney(id)
 	if err != nil {
 		return domain.JourneySnapshot{}, err
@@ -129,11 +179,39 @@ func (r *Runtime) Recalculate(ctx context.Context, id string) (domain.JourneySna
 	}), nil
 }
 
+// adviceInputs 是上一版建议实际用到的输入（时间戳除外）。
+//
+// ManualStage 必须在里面：手动确认的阶段只影响 advice.stage，不影响 state，
+// 只看 state 是否变化，会在旅客改了阶段之后继续复用旧建议。
+type adviceInputs struct {
+	state       domain.State
+	manualStage string
+	issues      []string
+}
+
+// sameAdviceInputs 判断两组输入是否等价（State 忽略时间戳）。
+func sameAdviceInputs(a, b adviceInputs) bool {
+	if a.manualStage != b.manualStage {
+		return false
+	}
+	if !sameState(a.state, b.state) {
+		return false
+	}
+	if len(a.issues) != len(b.issues) {
+		return false
+	}
+	for i := range a.issues {
+		if a.issues[i] != b.issues[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // decide 决定这一轮用新生成的建议，还是复用上一版。
 //
-// 状态没有实质变化时直接复用：模型调用又慢又费额度，
+// 输入没有实质变化时直接复用：模型调用又慢又费额度，
 // 15 秒一次的周期刷新没必要每次都重算建议。
-// 判据是除时间戳外 State 完全一致。
 func (r *Runtime) decide(
 	ctx context.Context,
 	result dataagent.Result,
@@ -142,8 +220,14 @@ func (r *Runtime) decide(
 	previous domain.JourneySnapshot,
 	hasPrevious bool,
 ) domain.Advice {
-	if hasPrevious && previous.Status == domain.StatusReady && sameState(result.State, previous.State) {
-		return previous.Advice
+	inputs := adviceInputs{state: result.State, manualStage: progress.ManualStage, issues: result.Issues}
+
+	if hasPrevious && previous.Status == domain.StatusReady {
+		if cached, ok := r.adviceInputs.Load(journey.ID); ok {
+			if prev, ok := cached.(adviceInputs); ok && sameAdviceInputs(prev, inputs) {
+				return previous.Advice
+			}
+		}
 	}
 
 	// 用快照时间戳作为"现在"：它与推给前端的 updatedAt 是同一个服务端时钟，
@@ -175,9 +259,12 @@ func (r *Runtime) decide(
 		// 免得用旧结论盖住新一轮的数据缺失。
 		merged.Risk = moreConservativeRisk(previous.Advice.Risk, next.Risk)
 		merged.Reasons = mergeReasons(previous.Advice.Reasons, next.Reasons)
+		// 刻意不记 adviceInputs：这一轮是降级复用，留下记录会让下一轮
+		// 直接复用旧建议、不再尝试调用模型。
 		return merged
 	}
 
+	r.adviceInputs.Store(journey.ID, inputs)
 	return next
 }
 

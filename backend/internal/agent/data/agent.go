@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sort"
 	"strings"
@@ -70,7 +71,7 @@ func (a *Agent) BuildState(ctx context.Context, in Input) (Result, error) {
 	for _, issue := range result.Issues {
 		log.Printf("[data] journey=%s %s", journey.ID, issue)
 	}
-	applyObservations(&state, queryResult.Observations)
+	result.Issues = append(result.Issues, applyObservations(&state, queryResult.Observations)...)
 
 	// 航班已经起飞或取消之后，"到机场还要多久"对旅客不再有意义：
 	// 留着它只会让建议退化成"乘飞机去机场"这种误导。这里直接在状态层清掉。
@@ -138,7 +139,10 @@ func (a *Agent) resolveJourneyIdentity(ctx context.Context, journey domain.Journ
 //
 // 每个字段都做一次类型与取值校验：技能出错时宁可字段留 null，
 // 也不能把非法枚举或格式错误的时间写进对外契约。
-func applyObservations(state *domain.State, observations []skill.Observation) {
+//
+// 返回被丢弃的观测值对应的 issues，交给调用方拼进 reasons。
+func applyObservations(state *domain.State, observations []skill.Observation) []string {
+	var issues []string
 	for _, obs := range observations {
 		switch obs.Field {
 		case skill.FieldFlightStatus:
@@ -161,22 +165,42 @@ func applyObservations(state *domain.State, observations []skill.Observation) {
 			}
 
 		case skill.FieldTravelETA:
-			switch value := obs.Value.(type) {
-			case int:
-				etaMin := value
-				state.ETAMin = &etaMin
-			case *int:
-				if value != nil {
-					etaMin := *value
-					state.ETAMin = &etaMin
-				}
+			minutes, ok := etaMinutesValue(obs.Value)
+			if !ok {
+				continue
 			}
+			// 合理性闸门放在 AdviceAgent 之前：一旦离谱的分钟数进了 State，
+			// 模型会拿它当事实，算出"已严重迟到"这类错误结论。
+			if !skill.ValidRouteETAMinutes(minutes) {
+				issues = append(issues, fmt.Sprintf(
+					"路程时间 %d 分钟超出可信范围（1~%d 分钟），已忽略",
+					minutes, skill.MaxRouteETAMinutes))
+				continue
+			}
+			etaMin := minutes
+			state.ETAMin = &etaMin
 
 		case skill.FieldAirportGuide:
 			if guide, ok := obs.Value.([]string); ok {
 				state.Guide = nonEmptyLines(guide)
 			}
 		}
+	}
+	return issues
+}
+
+// etaMinutesValue 从观测值里取出整数分钟数，类型不对时返回 false。
+func etaMinutesValue(value any) (int, bool) {
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case *int:
+		if v == nil {
+			return 0, false
+		}
+		return *v, true
+	default:
+		return 0, false
 	}
 }
 

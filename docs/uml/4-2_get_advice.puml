@@ -1,0 +1,70 @@
+@startuml
+skinparam defaultFontName "Arial"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+autonumber
+
+title Figure 4-2. Design Sequence: Get Journey Advice
+
+actor "Traveler" as User
+participant "Dashboard UI\n(Vue 3 + TypeScript)" as UI
+participant "JourneyHandler\n(Gin)" as API
+participant "Runtime" as RT
+participant "data.Agent" as DA
+participant "SkillRegistry\n(flight / airport / route skills)" as SK
+participant "advice.Agent" as AA
+participant "LLM endpoint\n(OpenAI-compatible)" as LLM
+participant "MemoryStore" as Store
+participant "SSEHub" as Hub
+
+User -> UI : view journey advice
+UI -> API : GET /api/v1/journey/{id}/state
+API -> RT : GetSnapshot(id)
+RT -> Store : GetSnapshot(id)
+Store --> RT : JourneySnapshot
+RT --> API : JourneySnapshot
+API --> UI : 200 OK + JourneySnapshot
+UI --> User : render advice.stage, advice.risk, cards and actions
+
+== asynchronous recalculation ==
+note over RT
+  trigger: POST /journey, POST /journey/{id}/location or the periodic
+  scheduler; per-journey recalculation is serialized (running / dirty)
+end note
+RT -> RT : Recalculate(id)
+RT -> DA : BuildState(journey, progress)
+DA -> SK : Query(missing fields)
+SK -> SK : flight_status / airport_status / flight_identity (EOOB)\nroute_eta (local estimate)
+SK --> DA : observations + issues
+note over DA
+  a failing source only adds issues; fields without evidence
+  stay null; quality = complete | degraded | unknown
+end note
+DA --> RT : State + issues
+
+RT -> RT : Decide: same inputs as the previous round?
+alt inputs unchanged, previous advice available
+  RT -> RT : reuse previous Advice (no LLM call)
+else inputs changed
+  RT -> AA : Evaluate(state, progress, issues, departureIATA, hasBaggage, now)
+  AA -> AA : compute time facts (minutesUntilGateClose, bufferMin)
+  AA -> LLM : Chat(system + user prompt, JSON mode)
+  LLM --> AA : advice JSON (stage, risk, alert, cards, actions, reasons)
+  AA -> AA : validate enums, clean cards, enforce risk floor,\nfill Nav links (nav symbol "airport" -> real link)
+  AA --> RT : Advice
+end
+
+RT -> Store : SaveSnapshot(snapshot)
+RT -> Hub : Publish(id, snapshot)
+Hub --> UI : event: snapshot
+UI --> User : updated advice cards and actions
+
+note over RT
+  if the new advice is empty (risk = unknown, no content) while the
+  previous advice had content, the previous content is kept and the
+  new issues are merged into reasons.
+end note
+
+@enduml

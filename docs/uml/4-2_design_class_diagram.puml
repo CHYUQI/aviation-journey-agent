@@ -1,16 +1,18 @@
 @startuml
-' 图4-5 系统设计类图
-' 关系依据第2章分析类图：UI -> Gin路由 -> 两个Agent，Gin路由统一读写行程状态
+' 图4-5 系统设计类图（设计类口径）
+' 说明：分析阶段的边界类、控制类、实体类只在需求分析中描述职责（见需求规格说明书）；
+'       设计阶段不再使用 boundary/control/entity 等分析类构造型，本图给出可直接实现的
+'       设计类、分层依赖与关键操作，类名与 backend/、frontend/ 实现保持一致。
 
 skinparam defaultFontName "Microsoft YaHei"
-skinparam defaultFontSize 14
+skinparam defaultFontSize 13
 skinparam shadowing false
-skinparam linetype ortho
 skinparam classAttributeIconSize 0
 skinparam packageStyle rectangle
 skinparam packageTitleAlignment left
-skinparam nodesep 34
-skinparam ranksep 54
+skinparam linetype polyline
+skinparam nodesep 40
+skinparam ranksep 50
 skinparam ArrowColor #333333
 skinparam ArrowFontSize 12
 skinparam classBackgroundColor #FFFFFF
@@ -25,66 +27,179 @@ top to bottom direction
 
 title 图4-5 系统设计类图
 
-' ==================== 边界类 ====================
-package "边界类" as BoundaryLayer {
-  class "UI" as UI <<boundary>> {
-    +请求信息()
-    +展示结果()
-    +展示导航入口()
-    +响应导航点击()
+' ==================== 用户界面层 ====================
+package "用户界面层" as UILayer {
+  class "JourneyCreationUI 行程创建界面" as UI1 {
+    +提交行程(请求 : CreateJourneyRequest) : 行程ID
   }
+
+  class "DashboardUI 行程仪表盘" as UI2 {
+    -快照 : JourneySnapshot
+    +订阅快照(行程ID)
+    +渲染快照(快照 : JourneySnapshot)
+  }
+
+  class "LocationStageUI 定位与阶段确认" as UI3 {
+    +上报位置(纬度 : double, 经度 : double)
+    +确认阶段(阶段 : ManualStage)
+  }
+
+  UI1 -[hidden]right- UI2
+  UI2 -[hidden]right- UI3
 }
 
-' ==================== 控制类 ====================
-package "控制类" as ControlLayer {
-  class "数据感知 Agent" as DataAgent <<control>> {
-    +获取数据()
-    +校验数据()
-    +生成状态()
+' ==================== 业务逻辑层 ====================
+package "业务逻辑层" as BizLayer {
+  class "JourneyHandler 请求处理器" as Handler {
+    -运行时 : Runtime
+    +创建行程(请求) : 行程ID
+    +查询状态(行程ID) : JourneySnapshot
+    +订阅快照(行程ID) : 快照流
   }
 
-  class "Gin 路由" as GinRoute <<control>> {
-    +处理请求()
-    +编排分析()
-    +管理快照()
+  class "Runtime 行程编排" as Runtime {
+    -存储 : MemoryStore
+    -数据感知 : DataAgent
+    -行动决策 : AdviceAgent
+    -推送 : SSEHub
+    +创建行程(行程 : Journey)
+    +更新位置或阶段(行程ID, 请求)
+    +重算(行程ID) : JourneySnapshot
   }
 
-  class "行动决策 Agent" as AdviceAgent <<control>> {
-    +分析状态()
-    +生成建议()
-    +评估风险()
+  class "DataAgent 数据感知" as DataAgent {
+    -技能注册表 : SkillRegistry
+    +生成世界状态(行程, 进度) : State
   }
 
-  DataAgent -[hidden]right- GinRoute
-  GinRoute -[hidden]right- AdviceAgent
+  class "AdviceAgent 行动决策" as AdviceAgent {
+    -模型客户端 : ModelClient
+    +生成建议(状态, 进度, 问题) : Advice
+  }
+
+  class "SkillRegistry 数据技能注册表" as SkillRegistry {
+    +查询(行程, 字段集合) : 观测值集合
+  }
+
+  class "ModelClient 大模型客户端" as ModelClient {
+    +对话(请求 : ModelRequest) : ModelResponse
+  }
+
+  class "SSEHub 快照推送" as SSEHub {
+    +订阅(行程ID) : 快照流
+    +广播(行程ID, 快照 : JourneySnapshot)
+  }
+
+  DataAgent -[hidden]right- Handler
+  Handler -[hidden]right- Runtime
+  Runtime -[hidden]right- AdviceAgent
+  SkillRegistry -[hidden]right- SSEHub
+  SSEHub -[hidden]right- ModelClient
 }
 
-' ==================== 实体类 ====================
-package "实体类" as EntityLayer {
-  class "行程状态" as JourneyState <<entity>> {
-    -行程信息
-    -世界状态
-    -行动建议
-    -数据质量
-    -生成时间
-    +读取快照()
-    +保存快照()
+' ==================== 数据层 ====================
+package "数据层" as DataLayer {
+  class "MemoryStore 快照存储" as Store {
+    +保存行程(行程)
+    +读取行程(行程ID) : Journey
+    +保存快照(快照)
+    +读取快照(行程ID) : JourneySnapshot
+    +保存进度(行程ID, 进度)
+    +读取进度(行程ID) : JourneyProgress
   }
+
+  class "JourneySnapshot 行程快照" as Snapshot {
+    -状态 : AnalysisStatus
+    -错误 : String
+  }
+
+  class "Journey 行程" as Journey {
+    -标识 : String
+    -是否托运 : boolean
+  }
+
+  class "Flight 航段" as Flight {
+    -航班号 : String
+    -日期 : Date
+    -出发 / 到达 : IATA
+  }
+
+  class "State 世界状态" as State {
+    -航班状态 : FlightStatus
+    -数据质量 : Quality
+    -更新时间 : DateTime
+  }
+
+  class "TimelineNode 时间轴节点" as TimelineNode {
+    -名称 : String
+    -时间 : DateTime
+  }
+
+  class "Advice 行动建议" as Advice {
+    -阶段 : Stage
+    -风险 : Risk
+    -提醒 : String
+  }
+
+  class "Card 指标卡" as Card {
+    -标题 : String
+    -数值 : String
+  }
+
+  class "Action 行动卡" as Action {
+    -标识 : String
+    -标题 : String
+    -说明 : String
+  }
+
+  class "Nav 导航信息" as Nav {
+    -App 链接 : String
+    -网页链接 : String
+  }
+
+  class "JourneyProgress 位置进度" as Progress {
+    -坐标 : Coordinate
+    -手动阶段 : ManualStage
+  }
+
+  Journey -[hidden]right- State
+  State -[hidden]right- Advice
+  Flight -[hidden]right- TimelineNode
+  TimelineNode -[hidden]right- Card
+  Card -[hidden]right- Action
 }
 
-' ==================== 正确的类间关系 ====================
-UI --> GinRoute : 请求与结果返回
-GinRoute -left-> DataAgent
-GinRoute -right-> AdviceAgent
-GinRoute --> JourneyState : 读取 / 保存快照
+' ==================== 分层协作关系 ====================
+UI1 --> Handler : 提交（HTTP）
+UI2 --> Handler : 查询 / 订阅（HTTP + SSE）
+UI3 --> Handler : 上报（HTTP）
+Handler --> Runtime : 调用
+Runtime --> DataAgent : 生成世界状态
+Runtime --> AdviceAgent : 生成建议
+Runtime --> Store : 存取行程 / 快照 / 进度
+Runtime --> SSEHub : 广播快照
+DataAgent --> SkillRegistry : 按字段查询
+AdviceAgent --> ModelClient : 对话
+SSEHub ..> UI2 : 快照推送（SSE）
+
+' ==================== 数据组合关系 ====================
+Snapshot *-- "1" Journey : journey
+Snapshot *-- "1" State : state
+Snapshot *-- "1" Advice : advice
+Journey *-- "1..*" Flight : flights
+State *-- "0..*" TimelineNode : timeline
+Advice *-- "0..*" Card : cards
+Advice *-- "0..*" Action : actions
+Action *-- "0..1" Nav : nav
 
 ' ==================== 设计约束 ====================
 legend bottom
   <b>设计约束</b>
-  Gin 路由是运行时编排入口；数据感知 Agent 只获取和处理数据，生成 WorldState；
-  行动决策 Agent 只消费 WorldState，不直接访问外部数据源；
-  Gin 路由向左调用数据感知 Agent 获取状态，向右调用行动决策 Agent 获取建议；
-  Gin 路由向下统一读取和保存行程状态快照。
+  · 分层依赖单向：用户界面层 → 业务逻辑层 → 数据层，下层不反向依赖上层
+  · Runtime 是唯一编排入口，也是唯一读写存储的类；DataAgent 与 AdviceAgent 不直接访问存储
+  · AdviceAgent 只消费状态与进度，不直接访问外部数据源；关键数据缺失时风险不得为 green
+  · 同一行程的重算串行执行；位置或阶段变化后立即重算并推送；快照以完整对象整体替换
+  · 分析阶段的边界类、控制类、实体类在设计阶段分别落实为界面组件、业务类与数据类，不再使用分析类构造型
 endlegend
 
 @enduml

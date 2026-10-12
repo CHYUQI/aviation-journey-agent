@@ -1,0 +1,244 @@
+@startuml
+' 图4-7 系统详细设计类图（分析类细化视图）
+' 依据：图2-7 分析类图、图4-5 设计类图、图4-6 数据设计类图，
+' 以及 backend/ 与 frontend/ 的实际实现对照。
+' 说明：仍采用分析类三分类视图（boundary / control / entity），
+'       但在详细设计粒度上补齐关键属性、方法（含类型）、支撑类与实体组合关系。
+'       如需调整图号，只改本行与 title。
+
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam linetype polyline
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam packageTitleAlignment left
+skinparam nodesep 40
+skinparam ranksep 60
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 12
+skinparam classBackgroundColor #FFFFFF
+skinparam classBorderColor #1F1F1F
+skinparam classFontColor #111111
+skinparam packageBackgroundColor #FFFFFF
+skinparam packageBorderColor #1F1F1F
+skinparam packageFontColor #111111
+skinparam noteBackgroundColor #FFFBE6
+skinparam noteBorderColor #B8A23A
+
+hide circle
+top to bottom direction
+
+title 图4-7 系统详细设计类图（分析类细化视图）
+
+' ==================== 边界类 ====================
+package "边界类" as BoundaryLayer {
+  class "行程创建界面" as UI1 <<boundary>> {
+    -航班表单 : Flight[1..*]
+    -是否托运 : Boolean
+    +录入航班与行李()
+    +提交行程() : JourneyID（202 受理）
+  }
+
+  class "行程状态界面" as UI2 <<boundary>> {
+    -快照 : JourneySnapshot
+    -上次提醒 : String
+    -连接状态 : Boolean
+    +订阅快照(行程ID)
+    +展示状态与时间轴()
+    +展示行动建议()
+    +弹出一句话提醒(alert)
+    +响应导航点击(nav)
+  }
+
+  class "定位与阶段确认界面" as UI3 <<boundary>> {
+    -定位结果 : Coordinate
+    +上报当前位置() : 202 受理
+    +确认所处阶段(阶段 : Stage) : 202 受理
+  }
+
+  UI1 -[hidden]right- UI2
+  UI2 -[hidden]right- UI3
+}
+
+' ==================== 控制类 ====================
+package "控制类" as ControlLayer {
+  class "行程编排控制类\n（Gin 路由 / Runtime）" as Route <<control>> {
+    -存储 : MemoryStore
+    -数据Agent : 数据感知 Agent
+    -建议Agent : 行动决策 Agent
+    -推送中心 : 快照推送控制类
+    -重算状态 : Map<行程ID, 重算状态>
+    +处理请求(端点, 请求体)
+    +编排分析(行程ID) : JourneySnapshot
+    -异步触发分析(行程ID)
+    -重算一轮(行程ID) : JourneySnapshot
+    -决定建议(世界状态, 位置进度, 问题清单) : Advice
+    -保存并推送(快照)
+  }
+
+  class "数据感知 Agent" as DataAgent <<control>> {
+    -技能注册表 : 聚合数据源接口
+    +生成世界状态(行程, 位置进度) : State + Issues
+    -补全行程身份(行程) : Journey
+    -检测缺失字段(状态) : String[]
+    -校验并回填观测值(观测值) : Issues
+    -评估数据质量(状态, 需要路程时间) : Quality
+  }
+
+  class "行动决策 Agent" as AdviceAgent <<control>> {
+    -模型客户端 : 大模型接口
+    +生成建议(状态, 位置进度, 问题清单, 出发机场, 是否托运, 服务端时间) : Advice
+    -计算时间事实(状态, 服务端时间) : 距登机口关闭/剩余缓冲
+    -构造提示词(输入) : String
+    -校验并清洗(模型输出) : Advice
+    -执行风险下限(建议, 输入) : Advice
+    -生成机场导航(出发机场) : Nav
+  }
+
+  class "聚合数据源接口" as SkillRegistry <<control>> {
+    +查询(行程, 位置, 缺失字段) : 观测值 + Issues
+  }
+
+  class "大模型接口" as ModelClient <<control>> {
+    +对话(系统提示, 用户提示) : 建议 JSON
+  }
+
+  class "快照推送控制类" as SSEHub <<control>> {
+    +订阅(行程ID) : 快照流
+    +广播(行程ID, 快照)
+  }
+
+  DataAgent -[hidden]right- Route
+  Route -[hidden]right- AdviceAgent
+}
+
+' ==================== 实体类 ====================
+package "实体类" as EntityLayer {
+  class "行程状态 JourneyState\n（快照聚合，前端唯一数据源）" as JourneyState <<entity>> {
+    -状态 : processing | ready | failed
+    -行程 : Journey
+    -世界状态 : State
+    -行动建议 : Advice
+    -位置进度 : JourneyProgress
+    -错误 : String?
+    +读取快照(行程ID) : JourneySnapshot
+    +保存快照(快照)
+    +读取进度(行程ID) : JourneyProgress
+    +保存进度(行程ID, 进度)
+  }
+
+  class "行程 Journey" as Journey <<entity>> {
+    -标识 : String
+    -是否托运 : Boolean
+    -航段 : Flight[1..*]
+    +校验(请求)
+  }
+
+  class "航段 Flight" as Flight <<entity>> {
+    -航班号 : String
+    -日期 : Date
+    -出发机场 : IATA
+    -到达机场 : IATA
+  }
+
+  class "世界状态 State" as State <<entity>> {
+    -航班状态 : FlightStatus
+    -登机口 : String?
+    -时间轴 : TimelineNode[0..*]
+    -路程时间 : Integer?（估算，分钟）
+    -路况 : Traffic?
+    -机场信息 : String[0..*]
+    -数据质量 : Quality
+    -更新时间 : DateTime
+  }
+
+  class "时间轴节点 TimelineNode" as TimelineNode <<entity>> {
+    -名称 : String
+    -时间 : DateTime
+  }
+
+  class "位置进度 JourneyProgress\n（内部实体，不进契约）" as Progress <<entity>> {
+    -坐标 : Coordinate?
+    -手动阶段 : Stage?
+  }
+
+  class "行动建议 Advice" as Advice <<entity>> {
+    -阶段 : Stage
+    -风险 : Risk
+    -一句话提醒 : String?
+    -指标卡 : Card[0..*]
+    -行动 : Action[0..*]
+    -依据 : String[0..*]
+  }
+
+  class "指标卡 Card" as Card <<entity>> {
+    -标题 : String
+    -展示值 : String
+  }
+
+  class "行动 Action" as Action <<entity>> {
+    -标识 : String
+    -标题 : String
+    -说明 : String
+    -导航 : Nav?
+  }
+
+  class "导航 Nav" as Nav <<entity>> {
+    -App 链接 : String
+    -Web 链接 : String
+  }
+
+  Journey -[hidden]right- State
+  State -[hidden]right- Advice
+  Card -[hidden]right- Action
+}
+
+' ==================== 边界类 → 控制类 ====================
+UI1 --> Route : 创建行程 / 202
+UI2 --> Route : 查快照 / 订阅 SSE
+UI3 --> Route : 上报坐标或阶段 / 202
+
+' ==================== 布局约束（仅影响排版，不表达语义） ====================
+BoundaryLayer -[hidden]down-> ControlLayer
+ControlLayer -[hidden]down-> EntityLayer
+
+' ==================== 控制类之间 ====================
+Route -left-> DataAgent : 生成世界状态
+Route -right-> AdviceAgent : 生成行动建议
+Route --> JourneyState : 读写快照与进度（唯一入口）
+Route --> SSEHub : 保存后广播
+SSEHub ..> UI2 : snapshot / heartbeat
+DataAgent ..> SkillRegistry : 按缺失字段查询
+AdviceAgent ..> ModelClient : 对话生成建议 JSON
+
+' ==================== 实体类组合 ====================
+JourneyState "1" *-- "1" Journey : journey
+JourneyState "1" *-- "1" State : state
+JourneyState "1" *-- "1" Advice : advice
+JourneyState "1" *-- "0..1" Progress : progress（内部）
+Journey "1" *-- "1..*" Flight : flights
+State "1" *-- "0..*" TimelineNode : timeline
+Advice "1" *-- "0..*" Card : cards
+Advice "1" *-- "0..*" Action : actions
+Action "1" *-- "0..1" Nav : nav
+
+' ==================== 设计约束与读图说明 ====================
+legend bottom
+  <b>设计约束</b>
+  · 边界类：UI 只渲染不判断；仅在 action.nav 非空时渲染导航按钮，点击后先打开 nav.app、失败回退 nav.web，是否点击由旅客决定
+  · 编排：行程编排控制类是唯一编排入口，也是唯一能读写快照的类；同行程重算串行（running / dirty）；位置或阶段变化后立即重算、立即推送
+  · 数据感知 Agent：只取数、校验并生成 WorldState，不生成行动建议，不直接访问实体与存储
+  · 行动决策 Agent：只消费 WorldState + 位置进度 + 问题清单，不直接访问外部数据源；关键数据缺失时 risk 只能 unknown / yellow，由 enforceRiskFloor 代码级兜底，绝不返回 green
+  · 聚合数据源接口：flight_status / airport_status / flight_identity / route_eta 四个技能只走 EOOB 聚合源 + 本地估算；单源失败只记 issue，不中断分析；估算值必须保留"估算"限定
+  · 大模型接口：OpenAI 兼容端点（百炼 / vLLM / Ollama）；模型输出必须再做结构与枚举校验；不可用时降级为 risk = unknown + 原因
+  <b>读图说明</b>
+  · 契约唯一真源：docs/api/openapi.yaml；实体字段与图4-6 数据设计类图一致
+  · 「?」表示可空：无依据时必须输出 null，不省略、不用默认值；数组无内容输出 []
+  · 时间取服务端时钟（RFC3339 带时区），时长一律整数分钟
+  · 枚举：Status = processing|ready|failed；Risk = unknown|green|yellow|orange|red
+  · Stage = unknown|en_route|at_airport|check_in|security|waiting|boarding|departed|disrupted
+  · 前端只渲染、后端只算数：所有数字来自 advice.cards[] 与 state
+endlegend
+
+@enduml

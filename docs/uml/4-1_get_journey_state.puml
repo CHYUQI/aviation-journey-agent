@@ -1,0 +1,71 @@
+@startuml
+skinparam defaultFontName "Arial"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+autonumber
+
+title Figure 4-1. Design Sequence: Get Journey State
+
+actor "Traveler" as User
+participant "Dashboard UI\n(Vue 3 + TypeScript)" as UI
+participant "JourneyHandler\n(Gin)" as API
+participant "Runtime" as RT
+participant "MemoryStore" as Store
+participant "SSEHub" as Hub
+
+User -> UI : open or refresh the journey page
+activate UI
+UI -> API : GET /api/v1/journey/{id}/state
+activate API
+API -> RT : GetSnapshot(id)
+activate RT
+RT -> Store : GetSnapshot(id)
+Store --> RT : JourneySnapshot (status = processing | ready | failed)
+RT --> API : JourneySnapshot
+deactivate RT
+API --> UI : 200 OK + JourneySnapshot
+deactivate API
+
+alt status = processing
+  UI --> User : skeleton screen (no risk colour, no action cards)
+else status = ready
+  UI --> User : render flight status, timeline, risk level, cards and actions
+else status = failed
+  UI --> User : keep last ready content, show error and retry entry
+end
+
+group real-time updates (Server-Sent Events)
+  UI -> API : GET /api/v1/journey/{id}/stream
+  activate API
+  API -> RT : Subscribe(id)
+  RT -> Hub : Subscribe(id)
+  Hub --> RT : snapshot channel
+  RT --> API : snapshot channel + current snapshot
+  API --> UI : event: snapshot (full JourneySnapshot)
+  loop no change for 15 s
+    API --> UI : event: heartbeat
+  end
+  note over UI
+    EventSource reconnects automatically;
+    if the stream stays down for more than 20 s,
+    the UI falls back to polling /state every 15 s.
+  end note
+  deactivate API
+end
+deactivate UI
+
+note over RT
+  Recalculation runs asynchronously: it is triggered by
+  POST /journey, POST /journey/{id}/location, or the periodic
+  scheduler (15 s tick, at most once per journey every 2 min).
+  Results are published as full snapshots through SSEHub.
+end note
+
+note over Store
+  Snapshots are keyed by journey.id and replaced as a whole.
+  GET /state never triggers recalculation.
+end note
+
+@enduml

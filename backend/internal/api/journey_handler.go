@@ -34,7 +34,7 @@ func (h *JourneyHandler) Create(c *gin.Context) {
 	journey := domain.Journey{
 		ID:         newJourneyID(req.Flights[0].Number),
 		Flights:    req.Flights,
-		HasBaggage: req.HasBaggage,
+		HasBaggage: *req.HasBaggage,
 	}
 	if err := h.runtime.CreateJourney(journey); err != nil {
 		serverError(c, err)

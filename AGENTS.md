@@ -257,3 +257,27 @@ npm run gen:api        # 之后 git diff 必须为空，否则说明类型没提
 | 真后端 | `cd backend && go run ./cmd/server`（:8080） |
 | 前端开发 | `cd frontend && npm ci && npm run dev`（:5173） |
 | 项目计划 | `projectplan.md` |
+
+---
+
+## 10. 联调与环境约定（2026-09-22 起生效）
+
+本次变更：删除 mock server（`backend/cmd/mockserver` 与 `MOCK_API` 开关），
+契约 `servers` 补上统一前缀 `/api/v1`，文档补 `npm ci` 与 `.env` 配置提醒，
+清理 `.docxwork` 等文档临时产物。由此固定以下约定：
+
+1. **开发期只连真实后端**：前端 Vite 固定把 `/api` 代理到 `http://localhost:8080`。
+   不要重新引入 mock 服务、`MOCK_API` 开关或按航班号切场景的假数据
+   （`MU9999` / `FAIL` 已失效）；第 5 节"禁止把模拟数据作为运行时数据源"同样覆盖联调链路。
+2. **契约地址的唯一写法**：`servers` 为 `http://localhost:8080/api/v1`，
+   `paths` 不带前缀（如 `/journey`）。改契约只动 `docs/api/openapi.yaml` 与
+   `docs/api/contract.md`，前端源码不动；`npm run gen:api` 之后
+   `frontend/src/types/api.d.ts` 的 diff 必须为空。
+3. **`.env` 不随仓库分发**：每个人拉下代码后必须自己执行
+   `copy backend\.env.example backend\.env` 并填 `MODEL_API_KEY`。
+   不配置不会崩，但模型走降级路径：`risk = unknown`、无卡片、无行动 ——
+   这是"别人拉下来界面不一样"最常见的原因。
+4. **前端首次必须 `npm ci`**：`node_modules` 不进版本库；用 `package-lock.json` 锁版本，
+   不要用 `npm i` / `npm i -D` 这类会升级依赖的写法（会让生成类型和别人不一致）。
+5. **临时产物不进库**：`.docxwork/`、`__pycache__/`、`*.pyc`、Word 锁文件 `~$*.docx`
+   已进 `.gitignore`；历史提交里的文档临时产物已删除，不要再用 `git add -f` 加回来。

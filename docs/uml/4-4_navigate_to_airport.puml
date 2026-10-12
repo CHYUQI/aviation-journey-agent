@@ -1,0 +1,44 @@
+@startuml
+skinparam defaultFontName "Arial"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+autonumber
+
+title Figure 4-4. Design Sequence: Navigate to Airport
+
+actor "Traveler" as User
+participant "Dashboard UI\n(Vue 3 + TypeScript)" as UI
+participant "advice.Agent" as AA
+participant "Map App" as App
+participant "Browser" as Web
+
+note over AA : runs during recalculation
+alt traveler already at the airport (stage at_airport .. boarding)
+  AA -> AA : no city navigation action; in-airport text guide only
+else traveler is on the way
+  AA -> AA : BuildAirportNav(departureIATA) -> Nav
+  note over AA
+    Nav.app = amapuri://route/plan?dname=...&mode=car
+    Nav.web = https://uri.amap.com/navigation?dname=...&mode=car
+    returns null when the IATA code is not in the name table
+  end note
+  AA -> AA : attach Nav to the "leave for airport" action
+end
+
+UI -> UI : render the Navigate button only when action.nav != null
+User -> UI : tap Navigate
+alt map app installed
+  UI -> App : open nav.app
+  App --> UI : app switched
+else app unavailable or desktop browser
+  UI -> Web : open nav.web
+end
+
+note over UI
+  the system never navigates automatically and never stores the route;
+  the traveler decides whether to tap the button.
+end note
+
+@enduml

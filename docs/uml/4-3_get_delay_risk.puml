@@ -1,0 +1,49 @@
+@startuml
+skinparam defaultFontName "Arial"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+autonumber
+
+title Figure 4-3. Design Sequence: Get Delay Risk
+
+actor "Traveler" as User
+participant "Dashboard UI\n(Vue 3 + TypeScript)" as UI
+participant "JourneyHandler\n(Gin)" as API
+participant "Runtime" as RT
+participant "advice.Agent" as AA
+participant "MemoryStore" as Store
+participant "SSEHub" as Hub
+
+User -> UI : view delay risk
+UI -> API : GET /api/v1/journey/{id}/state
+API -> RT : GetSnapshot(id)
+RT -> Store : GetSnapshot(id)
+Store --> RT : JourneySnapshot (advice.risk included)
+RT --> API : JourneySnapshot
+API --> UI : 200 OK + JourneySnapshot
+UI --> User : render advice.risk, reasons and state.updatedAt
+
+== risk evaluation (inside asynchronous recalculation) ==
+RT -> AA : Evaluate(state, progress, issues, departureIATA, hasBaggage, now)
+AA -> AA : ComputeTimeFacts:\nminutesUntilGateClose from timeline (gate-close node, else departure)\nbufferMin = minutesUntilGateClose - etaMin (skip etaMin at the airport)
+AA -> AA : map bufferMin to risk\n(>= 90: green, 30..90: yellow, 0..30: orange, < 0: red)
+alt key data missing
+  alt no flightStatus and no timeline
+    AA -> AA : risk = unknown; drop nav actions and actions that only restate missing data
+  else partial data
+    AA -> AA : cap risk at yellow (never green); list missing items in reasons
+  end
+end
+note over AA
+  one failing source never fails the whole analysis;
+  issues are merged into advice.reasons
+end note
+AA --> RT : Advice (stage, risk, alert, cards, reasons)
+RT -> Store : SaveSnapshot(snapshot)
+RT -> Hub : Publish(id, snapshot)
+Hub --> UI : event: snapshot
+UI --> User : updated risk level and reasons
+
+@enduml

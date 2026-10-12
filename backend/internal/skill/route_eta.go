@@ -17,6 +17,20 @@ const (
 	routeETAAverageSpeedKmH = 30.0
 )
 
+// MaxRouteETAMinutes 是路程时间的可信上限（24 小时）。
+//
+// 超过它就说明输入本身有问题（定位坐标越界、把地球另一端的坐标传了进来），
+// 或者这个行程根本不该用"驾车去机场"来建议。宁可没有数字，
+// 也不能把 3 万分钟这种看着精确、实际荒谬的值推给模型和界面 ——
+// 实测它会把"还剩 1219 分钟"和"你已严重迟到"同时写出来。
+const MaxRouteETAMinutes = 24 * 60
+
+// ValidRouteETAMinutes 判断一个路程时间是否可信。
+// DataAgent 在写入 State.ETAMin 之前会再校验一次（技能可能来自别处）。
+func ValidRouteETAMinutes(minutes int) bool {
+	return minutes >= 1 && minutes <= MaxRouteETAMinutes
+}
+
 // RouteETASkill 估算当前位置到出发机场的驾车耗时。
 //
 // 它不调用外部路径规划 API：
@@ -51,10 +65,15 @@ func (RouteETASkill) Execute(ctx context.Context, query Query) (Result, error) {
 		return Result{Issues: []string{"无法获取出发机场坐标：" + err.Error()}}, nil
 	}
 
-	etaMinutes := estimateDrivingMinutes(
+	etaMinutes, err := estimateDrivingMinutes(
 		query.Location.Lat, query.Location.Lng,
 		airportLat, airportLng,
 	)
+	if err != nil {
+		// 宁可 etaMin = null + 写明原因，也不给一个不可信的分钟数：
+		// 它会被模型当成事实，算出"已经迟到多少分钟"。
+		return Result{Issues: []string{"无法估算到机场的路程时间：" + err.Error()}}, nil
+	}
 
 	return Result{
 		Observations: []Observation{{
@@ -68,14 +87,42 @@ func (RouteETASkill) Execute(ctx context.Context, query Query) (Result, error) {
 	}, nil
 }
 
-func estimateDrivingMinutes(fromLat, fromLng, toLat, toLng float64) int {
+// estimateDrivingMinutes 估算驾车分钟数。
+//
+// 返回 error 表示输入或中间结果不可信（坐标越界、NaN/Inf、超出可信上限），
+// 调用方必须如实上报，不能退而求其次拿一个数字顶上。
+func estimateDrivingMinutes(fromLat, fromLng, toLat, toLng float64) (int, error) {
+	if !validCoordinate(fromLat, fromLng) {
+		return 0, fmt.Errorf("定位坐标超出取值范围（lat=%g lng=%g）", fromLat, fromLng)
+	}
+	if !validCoordinate(toLat, toLng) {
+		return 0, fmt.Errorf("机场坐标超出取值范围（lat=%g lng=%g）", toLat, toLng)
+	}
+
 	distanceKm := haversineKm(fromLat, fromLng, toLat, toLng)
 	roadKm := distanceKm * routeETARoadFactor
-	minutes := int(math.Ceil(roadKm / routeETAAverageSpeedKmH * 60))
-	if minutes < 1 {
-		return 1
+	if math.IsNaN(distanceKm) || math.IsInf(distanceKm, 0) || distanceKm < 0 ||
+		math.IsNaN(roadKm) || math.IsInf(roadKm, 0) {
+		return 0, fmt.Errorf("两点距离无法计算（lat=%g lng=%g）", fromLat, fromLng)
 	}
-	return minutes
+
+	minutes := int(math.Ceil(roadKm / routeETAAverageSpeedKmH * 60))
+	if minutes > MaxRouteETAMinutes {
+		return 0, fmt.Errorf("直线距离约 %.0f 公里，驾车估算超过 %d 小时，超出可用范围",
+			distanceKm, MaxRouteETAMinutes/60)
+	}
+	if minutes < 1 {
+		return 1, nil
+	}
+	return minutes, nil
+}
+
+// validCoordinate 判断经纬度是否在合法范围内，并挡住 NaN / ±Inf。
+func validCoordinate(lat, lng float64) bool {
+	if math.IsNaN(lat) || math.IsInf(lat, 0) || math.IsNaN(lng) || math.IsInf(lng, 0) {
+		return false
+	}
+	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
 }
 
 func haversineKm(lat1, lng1, lat2, lng2 float64) float64 {

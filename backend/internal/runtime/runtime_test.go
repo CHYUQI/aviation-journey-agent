@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -207,5 +208,127 @@ func TestRecalculateSendsStampedStateToAdvice(t *testing.T) {
 	}
 	if snapshot.State.UpdatedAt == "" || !strings.Contains(recorder.prompt, snapshot.State.UpdatedAt) {
 		t.Fatalf("快照时间戳与模型看到的不一致：snapshot=%q", snapshot.State.UpdatedAt)
+	}
+}
+
+// blockingModelClient 让第一轮分析停在模型调用里，用来复现
+// "分析进行中旅客又上报了一次阶段"的竞态。
+type blockingModelClient struct {
+	entered chan struct{}
+	release chan struct{}
+
+	mu    sync.Mutex
+	calls int
+}
+
+func (c *blockingModelClient) Chat(ctx context.Context, _ model.Request) (model.Response, error) {
+	c.mu.Lock()
+	c.calls++
+	call := c.calls
+	c.mu.Unlock()
+
+	if call == 1 {
+		close(c.entered)
+		select {
+		case <-c.release:
+		case <-ctx.Done():
+			return model.Response{}, ctx.Err()
+		}
+	}
+	return model.Response{
+		Content: `{"stage":"unknown","risk":"unknown","alert":null,"cards":[],"actions":[],"reasons":["测试"]}`,
+	}, nil
+}
+
+func (c *blockingModelClient) callCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls
+}
+
+// TestRecalculateRerunsWhenRequestArrivesDuringAnalysis 锁住这次实测出来的问题：
+// 分析进行中再上报一次阶段，旧实现直接 return 把这次重算丢掉了，
+// 界面会一直停在旧阶段（实测等到 4.5 分钟之后仍是 waiting，最后一次上报是 security）。
+func TestRecalculateRerunsWhenRequestArrivesDuringAnalysis(t *testing.T) {
+	memoryStore := store.NewMemoryStore()
+	journey := domain.Journey{
+		ID:      "j_dirty",
+		Flights: []domain.Flight{{Number: "CZ3101", Date: "2026-09-15", From: "CAN", To: "PKX"}},
+	}
+	memoryStore.SaveJourney(journey)
+	memoryStore.SaveProgress("j_dirty", domain.JourneyProgress{})
+	// CreateJourney 会先落一份 processing 快照，这里保持同样的前提
+	memoryStore.SaveSnapshot(domain.JourneySnapshot{
+		Status:  domain.StatusProcessing,
+		Journey: journey,
+		State:   domain.NewState(),
+		Advice:  domain.NewAdvice(),
+	})
+
+	client := &blockingModelClient{entered: make(chan struct{}), release: make(chan struct{})}
+	rt := New(memoryStore, dataagent.NewAgent(nil), adviceagent.NewAgent(client), NewSSEHub())
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := rt.Recalculate(context.Background(), "j_dirty"); err != nil {
+			t.Errorf("第一轮 Recalculate 报错: %v", err)
+		}
+	}()
+
+	select {
+	case <-client.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("第一轮分析没有进入模型调用")
+	}
+
+	// 分析进行中：旅客手动确认了安检阶段，并触发一次重算
+	memoryStore.SaveProgress("j_dirty", domain.JourneyProgress{ManualStage: domain.StageSecurity})
+	if _, err := rt.Recalculate(context.Background(), "j_dirty"); err != nil {
+		t.Fatalf("分析进行中的重算请求不应报错: %v", err)
+	}
+
+	close(client.release)
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("第一轮分析结束后没有补跑")
+	}
+
+	if got := client.callCount(); got != 2 {
+		t.Fatalf("分析进行中的上报必须补跑一次，模型调用次数 = %d，期望 2", got)
+	}
+	snapshot, err := memoryStore.GetSnapshot("j_dirty")
+	if err != nil {
+		t.Fatalf("读取快照失败: %v", err)
+	}
+	if snapshot.Advice.Stage != domain.StageSecurity {
+		t.Fatalf("补跑后快照阶段 = %q，期望 %q（最后一次上报必须体现在最终快照里）",
+			snapshot.Advice.Stage, domain.StageSecurity)
+	}
+}
+
+// TestSameAdviceInputsIncludesManualStage 说明为什么不能只比较 State：
+// 手动阶段只影响 advice，不影响 state，漏掉它就会复用旧建议。
+func TestSameAdviceInputsIncludesManualStage(t *testing.T) {
+	state := domain.State{FlightStatus: domain.FlightStatusOnTime, UpdatedAt: "2026-09-15T10:00:00+08:00"}
+	base := adviceInputs{state: state, manualStage: domain.StageWaiting}
+
+	sameStamp := base
+	sameStamp.state.UpdatedAt = "2026-09-15T10:00:15+08:00"
+	if !sameAdviceInputs(base, sameStamp) {
+		t.Fatal("只有时间戳不同时应视为同一份输入")
+	}
+
+	otherStage := base
+	otherStage.manualStage = domain.StageSecurity
+	if sameAdviceInputs(base, otherStage) {
+		t.Fatal("旅客改了阶段必须重新生成建议")
+	}
+
+	otherIssues := base
+	otherIssues.issues = []string{"缺少定位，无法估算路程时间"}
+	if sameAdviceInputs(base, otherIssues) {
+		t.Fatal("取数问题变化时必须重新生成建议")
 	}
 }

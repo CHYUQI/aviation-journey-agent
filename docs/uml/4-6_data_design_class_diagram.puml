@@ -1,6 +1,7 @@
 @startuml
-' 图4-6 数据设计类图
-' 类与字段严格取自 docs/api/openapi.yaml 的 schemas 定义，不新增字段
+' 图4-6 数据设计类图（含主外键、字段约束与枚举标注）
+' 类与字段取自 docs/api/openapi.yaml 的 schemas 定义，不新增契约字段；
+' 键与约束标注综合契约要求与实现约定：PK=主键，FK=外键（引用键），内键=组合对象内部标识。
 
 skinparam defaultFontName "Microsoft YaHei"
 skinparam defaultFontSize 13
@@ -19,51 +20,51 @@ top to bottom direction
 title 图4-6 数据设计类图
 
 class "JourneySnapshot 行程快照" as Snapshot <<data>> {
-  status : AnalysisStatus
-  error : String
+  status : AnalysisStatus  «枚举»
+  error : String  «可空，仅failed»
 }
 
 class "Journey 行程" as Journey <<data>> {
-  «key» id : String
+  «PK» id : String
   hasBaggage : boolean
 }
 
 class "State 行程状态" as State <<data>> {
-  flightStatus : FlightStatus
-  gate : String
-  etaMin : Integer
-  traffic : Traffic
-  guide : String[]
-  quality : Quality
-  updatedAt : DateTime
+  flightStatus : FlightStatus  «枚举»
+  gate : String  «可空»
+  etaMin : Integer  «可空，1~1440分钟»
+  traffic : Traffic  «枚举，可空»
+  guide : String[]  «空输出[]»
+  quality : Quality  «枚举»
+  updatedAt : DateTime  «RFC3339，服务端时钟»
 }
 
 class "Advice 行动建议" as Advice <<data>> {
-  stage : Stage
-  risk : Risk
-  alert : String
-  reasons : String[]
+  stage : Stage  «枚举»
+  risk : Risk  «枚举，缺数据不得green»
+  alert : String  «可空»
+  reasons : String[]  «空输出[]»
 }
 
 class "Flight 航段" as Flight <<data>> {
   number : String
-  date : Date
-  from : String
-  to : String
+  date : Date  «YYYY-MM-DD»
+  from : String  «IATA三字码»
+  to : String  «IATA三字码»
 }
 
 class "TimelineNode 时间轴节点" as TimelineNode <<data>> {
   label : String
-  time : DateTime
+  time : DateTime  «RFC3339»
 }
 
 class "Card 指标卡" as Card <<data>> {
   label : String
-  value : String
+  value : String  «已格式化»
 }
 
 class "Action 行动卡片" as Action <<data>> {
-  «key» id : String
+  «PK» id : String
   title : String
   detail : String
 }
@@ -73,16 +74,16 @@ class "Nav 导航信息" as Nav <<data>> {
   web : String
 }
 
-' ===== 组合关系与多重度（标签为承载该子对象的字段名）=====
-Snapshot "1" -- "1" Journey : journey
-Snapshot "1" -- "1" State : state
-Snapshot "1" -- "1" Advice : advice
+' ===== 组合关系、多重度与键（标签为承载该子对象的字段名）=====
+Snapshot "1" *-- "1" Journey : journey（外键：journey.id）
+Snapshot "1" *-- "1" State : state（无独立主键，随快照）
+Snapshot "1" *-- "1" Advice : advice（无独立主键，随快照）
 
-Journey "1" -- "1..*" Flight : flights
-State "1" -- "0..*" TimelineNode : timeline
-Advice "1" -- "0..*" Card : cards
-Advice "1" -- "0..*" Action : actions
-Action "1" -- "0..1" Nav : nav
+Journey "1" *-- "1..*" Flight : flights（内键：数组位置）
+State "1" *-- "0..*" TimelineNode : timeline（内键：label+time）
+Advice "1" *-- "0..*" Card : cards（内键：label）
+Advice "1" *-- "0..*" Action : actions（内键：id，建议内唯一）
+Action "1" *-- "0..1" Nav : nav（可空）
 
 ' ===== 固定各列横向顺序 =====
 Journey -[hidden]right- State
@@ -92,7 +93,15 @@ TimelineNode -[hidden]right- Card
 Card -[hidden]right- Action
 
 legend bottom
-  <b>可空字段</b>（无依据时返回 null，不返回默认值）：error、gate、etaMin、traffic、alert、nav
+  <b>键约定</b>
+  · PK 主键：Journey.id 为聚合根主键（快照与位置进度均以它为键）；Action.id 为建议内主键，作为前端渲染键
+  · FK 外键：JourneySnapshot 以 journey.id 为存储与推送键；JourneyProgress（内部对象，不进入契约）以 journey.id 关联
+  · 内键（组合对象内部标识）：Flight=行程内数组位置；TimelineNode=label+time；Card=label（卡内唯一）；Nav 依附 Action（0..1）
+  <b>字段约束</b>
+  · 未标注«可空»的字段均为必填；可空字段（error、gate、etaMin、traffic、alert、nav）无依据时必须返回 null，不用默认值
+  · 数组无内容时输出 []，不返回 null；日期为 YYYY-MM-DD；时间取服务端时钟并采用 RFC3339
+  · 路程时间 etaMin 为 1~1440 分钟的整数；机场代码为三位大写 IATA（^[A-Z]{3}$）
+  · 关键数据缺失时 risk 只能为 unknown 或 yellow，不得返回 green
   <b>枚举取值域</b>
   AnalysisStatus = processing | ready | failed
   FlightStatus = unknown | scheduled | on_time | delayed | boarding | departed | cancelled | diverted
