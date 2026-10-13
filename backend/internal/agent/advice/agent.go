@@ -51,7 +51,7 @@ func (a *Agent) Evaluate(ctx context.Context, in Input) domain.Advice {
 	// 最后一道防线：数据不足时不允许给出"安全"结论
 	enforceRiskFloor(&result, in)
 
-	return result
+	return WithAirportTimeSimulation(result, in)
 }
 
 func (a *Agent) evaluate(ctx context.Context, in Input) domain.Advice {
