@@ -89,5 +89,12 @@ export const useJourneyStore = defineStore('journey', () => {
     currentId = null
   }
 
-  return { snapshot, lastReady, connected, fallbackActive, load, stop }
+  // 删除行程：断开订阅并清空本地快照，供界面回到创建表单
+  function reset() {
+    stop()
+    snapshot.value = null
+    lastReady.value = null
+  }
+
+  return { snapshot, lastReady, connected, fallbackActive, load, stop, reset }
 })

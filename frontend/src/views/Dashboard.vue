@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useJourneyStore } from '../stores/journey'
+import { clearSavedJourney, loadSavedJourney, saveJourney } from '../stores/persistedJourney'
 import { createJourney } from '../api/journey'
 import type { CreateJourneyRequest } from '../types'
 import StatusBar from '../components/StatusBar.vue'
@@ -19,16 +20,17 @@ const snapshot = computed(() => store.snapshot)
 const journeyId = ref<string | null>(null)
 const creating = ref(false)
 const formError = ref<string | null>(null)
-const form = ref<CreateJourneyRequest>({
-  flights: [{ number: '', date: today(), from: '', to: '' }],
-  hasBaggage: false,
-})
+const form = ref<CreateJourneyRequest>(blankForm())
 
 function today() {
   const d = new Date()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}-${m}-${day}`
+}
+
+function blankForm(): CreateJourneyRequest {
+  return { flights: [{ number: '', date: today(), from: '', to: '' }], hasBaggage: false }
 }
 
 function buildPayload(): CreateJourneyRequest {
@@ -62,7 +64,9 @@ async function submit() {
   if (!validate()) return
   creating.value = true
   try {
-    const accepted = await createJourney(buildPayload())
+    const payload = buildPayload()
+    const accepted = await createJourney(payload)
+    saveJourney(accepted.journeyId, payload)
     journeyId.value = accepted.journeyId
     await store.load(accepted.journeyId)
   } catch {
@@ -77,7 +81,9 @@ async function retry() {
   if (!validate()) return
   creating.value = true
   try {
-    const accepted = await createJourney(buildPayload())
+    const payload = buildPayload()
+    const accepted = await createJourney(payload)
+    saveJourney(accepted.journeyId, payload)
     journeyId.value = accepted.journeyId
     await store.load(accepted.journeyId)
   } catch {
@@ -107,6 +113,44 @@ watch(() => snapshot.value?.advice.alert, (alert) => {
   lastAlert = alert ?? null
 })
 
+// ---- 本地持久化（契约无删除接口）：只在本机记录行程，下次进入自动恢复 ----
+const restoring = ref(false)
+
+// 恢复上次行程。后端行程不落库，取不到就按保存的航班信息重建一条
+async function restoreJourney() {
+  const saved = loadSavedJourney()
+  if (!saved) return
+  restoring.value = true
+  form.value = saved.payload
+  try {
+    try {
+      await store.load(saved.journeyId)
+      journeyId.value = saved.journeyId
+    } catch {
+      const accepted = await createJourney(saved.payload)
+      saveJourney(accepted.journeyId, saved.payload)
+      await store.load(accepted.journeyId)
+      journeyId.value = accepted.journeyId
+    }
+  } catch {
+    formError.value = '恢复上次行程失败，请重新填写'
+    form.value = blankForm()
+  } finally {
+    restoring.value = false
+  }
+}
+
+// 删除行程：清本机记录 + 复位界面；后端那条行程不落库，随进程退出消失
+function removeJourney() {
+  if (creating.value) return
+  clearSavedJourney()
+  store.reset()
+  journeyId.value = null
+  lastAlert = null
+  formError.value = null
+  form.value = blankForm()
+}
+
 // ---- failed 保留已有内容：用最后一次 ready 快照渲染，状态与错误取当前快照 ----
 const display = computed(() => {
   const s = snapshot.value
@@ -117,6 +161,7 @@ const display = computed(() => {
   return s
 })
 
+onMounted(restoreJourney)
 onUnmounted(() => store.stop())
 </script>
 
@@ -128,70 +173,82 @@ onUnmounted(() => store.stop())
       <p>把航班、机场和旅客状态转换成下一步可执行行动。</p>
     </header>
 
-    <!-- 无行程：创建表单 -->
-    <section v-if="!journeyId" class="panel journey-form">
-      <div class="panel-heading"><h2>创建行程</h2><span>填写首个航段信息</span></div>
-      <form @submit.prevent="submit">
-        <div class="form-grid">
-          <label>航班号<input v-model.trim="form.flights[0].number" placeholder="CA1234" maxlength="8" /></label>
-          <label>日期<input v-model="form.flights[0].date" type="date" /></label>
-          <label>出发机场<input v-model.trim="form.flights[0].from" placeholder="PVG" maxlength="3" /></label>
-          <label>到达机场<input v-model.trim="form.flights[0].to" placeholder="PEK" maxlength="3" /></label>
-        </div>
-        <label class="baggage-check"><input v-model="form.hasBaggage" type="checkbox" /> 携带托运行李</label>
-        <p v-if="formError" class="form-error">{{ formError }}</p>
-        <button class="primary" type="submit" :disabled="creating">
-          {{ creating ? '正在分析…' : '开始分析' }}
-        </button>
-      </form>
-    </section>
-
-    <!-- 无行程：落地页补充内容（纯静态展示，不参与逻辑） -->
+    <!-- 无行程：恢复中显示骨架，否则显示创建表单与落地页 -->
     <template v-if="!journeyId">
-      <section class="features" aria-label="产品特性">
-        <article class="feature-card">
-          <div class="feature-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-          </div>
-          <h3>实时延误预警</h3>
-          <p>起飞前持续追踪航班状态，延误与登机口变更第一时间提醒。</p>
-        </article>
-        <article class="feature-card">
-          <div class="feature-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /><path d="M5 12h14" /></svg>
-          </div>
-          <h3>行程时间轴</h3>
-          <p>开始登机、登机口关闭、起飞——关键节点一目了然。</p>
-        </article>
-        <article class="feature-card">
-          <div class="feature-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><polygon points="16.2 7.8 14.1 14.1 7.8 16.2 9.9 9.9 16.2 7.8" /></svg>
-          </div>
-          <h3>一键行动建议</h3>
-          <p>时间紧张时给出可直接执行的动作与路线导航。</p>
-        </article>
+      <section v-if="restoring" class="skeleton" aria-label="正在恢复上次行程">
+        <div v-for="i in 3" :key="i" class="skeleton-card"></div>
+        <p class="muted">正在恢复上次行程…</p>
       </section>
 
-      <section class="steps" aria-label="使用流程">
-        <div class="step">
-          <span class="step-num">1</span>
-          <div class="step-text"><h4>创建行程</h4><p>填写航班号与起降机场</p></div>
-        </div>
-        <div class="step">
-          <span class="step-num">2</span>
-          <div class="step-text"><h4>实时分析</h4><p>追踪状态与位置，评估延误风险</p></div>
-        </div>
-        <div class="step">
-          <span class="step-num">3</span>
-          <div class="step-text"><h4>按建议行动</h4><p>一键导航，从容赶上航班</p></div>
-        </div>
-      </section>
+      <template v-else>
+        <section class="panel journey-form">
+          <div class="panel-heading"><h2>创建行程</h2><span>填写首个航段信息</span></div>
+          <form @submit.prevent="submit">
+            <div class="form-grid">
+              <label>航班号<input v-model.trim="form.flights[0].number" placeholder="CA1234" maxlength="8" /></label>
+              <label>日期<input v-model="form.flights[0].date" type="date" /></label>
+              <label>出发机场<input v-model.trim="form.flights[0].from" placeholder="PVG" maxlength="3" /></label>
+              <label>到达机场<input v-model.trim="form.flights[0].to" placeholder="PEK" maxlength="3" /></label>
+            </div>
+            <label class="baggage-check"><input v-model="form.hasBaggage" type="checkbox" /> 携带托运行李</label>
+            <p v-if="formError" class="form-error">{{ formError }}</p>
+            <button class="primary" type="submit" :disabled="creating">
+              {{ creating ? '正在分析…' : '开始分析' }}
+            </button>
+          </form>
+        </section>
 
-      <p class="trust-note">实时推送 · 服务端时钟校准 · 行程数据不落库</p>
+        <!-- 落地页补充内容（纯静态展示，不参与逻辑） -->
+        <section class="features" aria-label="产品特性">
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+            </div>
+            <h3>实时延误预警</h3>
+            <p>起飞前持续追踪航班状态，延误与登机口变更第一时间提醒。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /><path d="M5 12h14" /></svg>
+            </div>
+            <h3>行程时间轴</h3>
+            <p>开始登机、登机口关闭、起飞——关键节点一目了然。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><polygon points="16.2 7.8 14.1 14.1 7.8 16.2 9.9 9.9 16.2 7.8" /></svg>
+            </div>
+            <h3>一键行动建议</h3>
+            <p>时间紧张时给出可直接执行的动作与路线导航。</p>
+          </article>
+        </section>
+
+        <section class="steps" aria-label="使用流程">
+          <div class="step">
+            <span class="step-num">1</span>
+            <div class="step-text"><h4>创建行程</h4><p>填写航班号与起降机场</p></div>
+          </div>
+          <div class="step">
+            <span class="step-num">2</span>
+            <div class="step-text"><h4>实时分析</h4><p>追踪状态与位置，评估延误风险</p></div>
+          </div>
+          <div class="step">
+            <span class="step-num">3</span>
+            <div class="step-text"><h4>按建议行动</h4><p>一键导航，从容赶上航班</p></div>
+          </div>
+        </section>
+
+        <p class="trust-note">实时推送 · 服务端时钟校准 · 行程数据不落库</p>
+      </template>
     </template>
 
     <!-- 有行程：三态渲染 -->
     <template v-else-if="display">
+      <div class="journey-toolbar">
+        <span class="muted">行程已保存在本机浏览器，下次进入自动恢复</span>
+        <button type="button" class="ghost-btn" :disabled="creating" @click="removeJourney">删除行程</button>
+      </div>
+
       <StatusBar
         :status="display.status"
         :stage="display.advice.stage"

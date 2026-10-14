@@ -51,6 +51,10 @@ func (a *Agent) Evaluate(ctx context.Context, in Input) domain.Advice {
 	// 最后一道防线：数据不足时不允许给出"安全"结论
 	enforceRiskFloor(&result, in)
 
+	// 导航是工具动作，不是风险结论。放在风险兜底之后，保证"有定位、有目的地
+	// 就能打开地图"这件事不被降级连带撤掉。
+	ensureAirportNav(&result, in)
+
 	return result
 }
 
@@ -82,7 +86,9 @@ func (a *Agent) evaluate(ctx context.Context, in Input) domain.Advice {
 
 	// 不在这里追加 in.Issues：prompt 已要求模型把 dataIssues 用人话写进 reasons，
 	// 再追加一遍会在界面上出现内容相近的两条。模型没接上时才走 degraded 分支。
-	return parsed.toDomain(BuildAirportNav(in.AirportIATA))
+	//
+	// 导航链接带上旅客当前位置作为起点：PC 端不会自动补起点，不传就是两个空框。
+	return parsed.toDomain(BuildAirportNav(in.AirportIATA, in.Progress.Location))
 }
 
 // degraded 返回一份安全的兜底建议：risk = unknown、没有行动，

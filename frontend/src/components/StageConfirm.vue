@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useLocation } from '../stores/location'
 import type { ManualStage } from '../types'
 
-// 契约 7.6：定位不可用时的降级入口，选项固定为 6 个 ManualStage
+// 契约 7.6：优先上报浏览器定位；定位不可用时用手动确认阶段降级
 const props = defineProps<{ journeyId: string; disabled: boolean }>()
 
 const stages: { value: ManualStage; label: string }[] = [
@@ -29,8 +29,7 @@ async function pick(stage: ManualStage) {
   }
 }
 
-// 契约 7.6/7.7：定位可用时上报坐标，后端据此算路程时间与风险；
-// 上报坐标后后端会自动解除手动确认的阶段，前端不用额外处理。
+// 上报一次浏览器定位；成功后后端会重算，「导航到机场」按钮随之出现
 async function reportLocation() {
   if (props.disabled || locating.value) return
   locating.value = true
@@ -46,16 +45,21 @@ async function reportLocation() {
   <section class="panel stage-confirm">
     <div class="panel-heading">
       <h2>当前在哪个环节？</h2>
-      <span>定位不可用时手动确认</span>
+      <span>优先自动定位 · 不可用时手动确认</span>
     </div>
 
     <div class="locate-row">
-      <button class="primary" type="button" :disabled="disabled || locating" @click="reportLocation">
-        {{ locating ? '定位中…' : '上报当前位置' }}
+      <button
+        class="primary"
+        type="button"
+        :disabled="disabled || locating"
+        @click="reportLocation"
+      >
+        {{ locating ? '正在定位…' : '定位并上报' }}
       </button>
-      <span v-if="error" class="form-error">{{ error }}</span>
-      <span v-else-if="granted" class="muted">已上报位置，正在重算</span>
+      <span v-if="granted && !error" class="locate-state">已上报定位</span>
     </div>
+    <p v-if="error" class="form-error">{{ error }}</p>
 
     <div class="stage-options">
       <button

@@ -36,7 +36,7 @@ func main() {
 	skillRegistry.Register(skill.NewFlightStatusSkill())
 	skillRegistry.Register(skill.NewFlightIdentitySkill())
 	skillRegistry.Register(skill.NewAirportStatusSkill())
-	skillRegistry.Register(skill.RouteETASkill{})
+	skillRegistry.Register(skill.NewRouteETASkill(cfg.Amap.APIKey, cfg.Amap.BaseURL, cfg.Amap.Timeout))
 
 	dataAgent := dataagent.NewAgent(skillRegistry)
 	adviceAgent := adviceagent.NewAgent(newModelClient(cfg))
