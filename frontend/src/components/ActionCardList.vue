@@ -14,10 +14,16 @@ defineProps<{ actions: Action[] }>()
     <article v-for="action in actions" :key="action.id" class="action-card">
       <div>
         <h3>{{ action.title }}</h3>
-        <p>{{ action.detail }}</p>
+        <p class="action-detail">{{ action.detail }}</p>
       </div>
       <NavigateButton v-if="action.nav" :nav="action.nav" />
     </article>
     <p v-if="actions.length === 0" class="muted">当前没有可展示的行动建议。</p>
   </section>
 </template>
+
+<style scoped>
+.action-detail {
+  white-space: pre-line;
+}
+</style>

@@ -170,6 +170,56 @@ func TestDecideKeepsAdviceWhenRefreshDegrades(t *testing.T) {
 	}
 }
 
+func TestDecideRefreshesAirportSimulationWhenModelFails(t *testing.T) {
+	journey := domain.Journey{ID: "j_simulation", HasBaggage: true}
+	state := domain.NewState()
+	state.FlightStatus = domain.FlightStatusOnTime
+	state.Timeline = []domain.TimelineNode{{Label: "起飞", Time: "2026-10-13T18:00:00+08:00"}}
+	state.Guide = []string{"客流（出发）：当前小时计划旅客座位数 1000 座，未来 24 小时合计约 24000 座"}
+	base := domain.NewAdvice()
+	base.Stage = domain.StageAtAirport
+	base.Risk = domain.RiskYellow
+	base.Actions = []domain.Action{{ID: "security", Title: "办理机场手续", Detail: "按现场指引前往安检，再去登机口"}}
+	previous := domain.JourneySnapshot{
+		Status: domain.StatusReady,
+		State:  state,
+		Advice: adviceagent.WithAirportTimeSimulation(base, adviceagent.Input{State: state, HasBaggage: true}),
+	}
+
+	for _, tc := range []struct {
+		name, traffic  string
+		wantSimulation bool
+	}{
+		{"客流升高且阶段推进", "客流（出发）：当前小时计划旅客座位数 2000 座，未来 24 小时合计约 24000 座", true},
+		{"当前小时缺失", "客流（出发）：当前小时数据暂缺，未来 24 小时合计约 24000 座", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rt := New(store.NewMemoryStore(), nil, adviceagent.NewAgent(failingModelClient{}), NewSSEHub())
+			nextState := state
+			nextState.Guide = []string{tc.traffic}
+			got := rt.decide(context.Background(), dataagent.Result{State: nextState},
+				domain.JourneyProgress{ManualStage: domain.StageSecurity}, journey, previous, true)
+			if got.Stage != domain.StageSecurity || len(got.Actions) != 1 || len(got.Cards) != 0 {
+				t.Fatalf("应保留已有行动并应用最新手动阶段：%+v", got)
+			}
+			detail := got.Actions[0].Detail
+			if tc.wantSimulation {
+				if !strings.Contains(detail, "安检时间（模拟）：约 40 分钟") || strings.Contains(detail, "值机时间（模拟）") {
+					t.Fatalf("降级复用仍应按新客流和阶段更新模拟：%s", detail)
+				}
+			} else if detail != base.Actions[0].Detail {
+				t.Fatalf("当前小时客流缺失时应清除旧模拟：%s", detail)
+			}
+			if strings.Count(strings.Join(got.Reasons, " | "), "机场流程模拟依据：") != 1 {
+				t.Fatalf("旧模拟依据应被替换：%v", got.Reasons)
+			}
+			if !strings.Contains(previous.Advice.Actions[0].Detail, "安检时间（模拟）：约 20 分钟") {
+				t.Fatal("刷新不得修改此前快照")
+			}
+		})
+	}
+}
+
 // recordingModelClient 记下最后一次提示词，用来断言模型看到的输入内容。
 type recordingModelClient struct{ prompt string }
 

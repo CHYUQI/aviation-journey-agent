@@ -51,11 +51,8 @@ func (a *Agent) Evaluate(ctx context.Context, in Input) domain.Advice {
 	// 最后一道防线：数据不足时不允许给出"安全"结论
 	enforceRiskFloor(&result, in)
 
-	// 导航是工具动作，不是风险结论。放在风险兜底之后，保证"有定位、有目的地
-	// 就能打开地图"这件事不被降级连带撤掉。
-	ensureAirportNav(&result, in)
-
-	return result
+  ensureAirportNav(&result, in)
+  return WithAirportTimeSimulation(result, in)
 }
 
 func (a *Agent) evaluate(ctx context.Context, in Input) domain.Advice {

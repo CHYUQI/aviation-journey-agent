@@ -221,11 +221,18 @@ func (r *Runtime) decide(
 	hasPrevious bool,
 ) domain.Advice {
 	inputs := adviceInputs{state: result.State, manualStage: progress.ManualStage, issues: result.Issues}
+	adviceInput := adviceagent.Input{
+		State:       result.State,
+		Progress:    progress,
+		Issues:      result.Issues,
+		AirportIATA: departureAirport(journey),
+		HasBaggage:  journey.HasBaggage,
+	}
 
 	if hasPrevious && previous.Status == domain.StatusReady {
 		if cached, ok := r.adviceInputs.Load(journey.ID); ok {
 			if prev, ok := cached.(adviceInputs); ok && sameAdviceInputs(prev, inputs) {
-				return previous.Advice
+				return adviceagent.WithAirportTimeSimulation(previous.Advice, adviceInput)
 			}
 		}
 	}
@@ -237,14 +244,8 @@ func (r *Runtime) decide(
 		now = ts
 	}
 
-	next := r.advice.Evaluate(ctx, adviceagent.Input{
-		State:       result.State,
-		Progress:    progress,
-		Issues:      result.Issues,
-		AirportIATA: departureAirport(journey),
-		HasBaggage:  journey.HasBaggage,
-		Now:         now,
-	})
+	adviceInput.Now = now
+	next := r.advice.Evaluate(ctx, adviceInput)
 
 	// 刷新时模型/数据源临时故障，本轮建议会变成空壳（risk=unknown、没有卡片也没有行动）。
 	// 直接落库等于把上一轮算好的建议擦掉，界面上就是"卡片突然消失"。
@@ -261,7 +262,7 @@ func (r *Runtime) decide(
 		merged.Reasons = mergeReasons(previous.Advice.Reasons, next.Reasons)
 		// 刻意不记 adviceInputs：这一轮是降级复用，留下记录会让下一轮
 		// 直接复用旧建议、不再尝试调用模型。
-		return merged
+		return adviceagent.WithAirportTimeSimulation(merged, adviceInput)
 	}
 
 	r.adviceInputs.Store(journey.ID, inputs)
