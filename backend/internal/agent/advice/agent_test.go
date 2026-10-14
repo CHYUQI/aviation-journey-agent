@@ -3,11 +3,15 @@ package advice
 import (
 	"context"
 	"errors"
+	"math"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"aviation-journey-agent/backend/internal/domain"
+	"aviation-journey-agent/backend/internal/geo"
 	"aviation-journey-agent/backend/internal/model"
 )
 
@@ -270,14 +274,299 @@ func TestEvaluate_UnknownAirportDropsNav(t *testing.T) {
 	}
 }
 
-func TestBuildAirportNav(t *testing.T) {
-	if BuildAirportNav("ZZZ") != nil {
+func TestBuildAirportNav_UnknownCodeHasNoLink(t *testing.T) {
+	if BuildAirportNav("ZZZ", nil) != nil {
 		t.Fatal("未知三字码应返回 nil")
 	}
-	nav := BuildAirportNav("pvg")
-	if nav == nil || !strings.Contains(nav.App, "dname=") {
-		t.Fatalf("大小写不敏感地查表失败: %+v", nav)
+}
+
+// 两条链接都必须带终点坐标。
+//
+// 高德的 URI 以经纬度定位目的地：只给地名时导航页是空的，
+// 这正是一开始"点了导航但终点没带出来"的原因。
+func TestBuildAirportNav_CarriesDestinationCoordinates(t *testing.T) {
+	nav := BuildAirportNav("pvg", nil)
+	if nav == nil {
+		t.Fatal("大小写不敏感地查表失败")
 	}
+
+	for _, want := range []string{"dlat=", "dlon=", "dname=", "dev=0", "t=0", "sourceApplication="} {
+		if !strings.Contains(nav.App, want) {
+			t.Fatalf("App 链接缺少参数 %s：%s", want, nav.App)
+		}
+	}
+	// 目的地中文名要经过 URL 编码
+	if !strings.Contains(nav.App, "%E4%B8%8A%E6%B5%B7") { // 上海
+		t.Fatalf("目的地应经过 URL 编码: %s", nav.App)
+	}
+
+	// 网页版的 to 是 lon,lat[,name]，经度在前
+	toLng, toLat := coordPair(t, queryParam(t, nav.Web, "to"))
+	if toLng < 121.7 || toLng > 121.9 {
+		t.Fatalf("to 的第一个分量应当是经度（浦东约 121.8），实际 %v：%s", toLng, nav.Web)
+	}
+	if toLat < 31.0 || toLat > 31.3 {
+		t.Fatalf("to 的第二个分量应当是纬度（浦东约 31.1），实际 %v：%s", toLat, nav.Web)
+	}
+
+	// 没有定位时不带起点，交给高德自己决定
+	if strings.Contains(nav.App, "slat=") || strings.Contains(nav.Web, "from=") {
+		t.Fatalf("没有定位时不应带起点：%s / %s", nav.App, nav.Web)
+	}
+}
+
+// 有定位时两条链接都要显式带上起点。
+//
+// 网页版的 from 留空只在移动端自动补当前位置，PC 端不会补 ——
+// 不带起点的话，在电脑上点导航依然是一个空框。
+func TestBuildAirportNav_CarriesOriginWhenLocated(t *testing.T) {
+	origin := &domain.Coordinate{Lat: 31.2304, Lng: 121.4737} // 上海市中心
+
+	nav := BuildAirportNav("PVG", origin)
+	if nav == nil {
+		t.Fatal("查表失败")
+	}
+
+	slat := queryParam(t, nav.App, "slat")
+	slon := queryParam(t, nav.App, "slon")
+	originLat, err := strconv.ParseFloat(slat, 64)
+	if err != nil {
+		t.Fatalf("slat 不是数字: %q", slat)
+	}
+	originLng, err := strconv.ParseFloat(slon, 64)
+	if err != nil {
+		t.Fatalf("slon 不是数字: %q", slon)
+	}
+	// 起点转成 GCJ-02 后仍应落在市中心附近，偏移只有几百米
+	if math.Abs(originLng-121.4737) > 0.01 || math.Abs(originLat-31.2304) > 0.01 {
+		t.Fatalf("起点坐标偏移过大：%v,%v", originLng, originLat)
+	}
+
+	fromLng, fromLat := coordPair(t, queryParam(t, nav.Web, "from"))
+	if fromLng < 121.4 || fromLng > 121.5 {
+		t.Fatalf("from 的第一个分量应当是经度，实际 %v", fromLng)
+	}
+	if fromLat < 31.2 || fromLat > 31.3 {
+		t.Fatalf("from 的第二个分量应当是纬度，实际 %v", fromLat)
+	}
+
+	// 起点与终点要同时存在，且是不同位置
+	if !strings.Contains(nav.App, "dlat=") || !strings.Contains(nav.App, "slat=") {
+		t.Fatalf("App 链接应同时带起点与终点：%s", nav.App)
+	}
+	if strings.Contains(queryParam(t, nav.Web, "to"), queryParam(t, nav.Web, "from")) {
+		t.Fatalf("起点与终点不应相同：%s", nav.Web)
+	}
+}
+
+// 定位要一路传到导航链接里：Input.Progress.Location -> BuildAirportNav。
+func TestEvaluate_NavCarriesReportedLocation(t *testing.T) {
+	client := &fakeClient{content: `{
+		"stage": "en_route",
+		"risk": "yellow",
+		"alert": null,
+		"cards": [],
+		"actions": [{"id": "leave_now", "title": "尽快出发", "detail": "预计 52 分钟到机场", "nav": "airport"}],
+		"reasons": []
+	}`}
+
+	got := NewAgent(client).Evaluate(context.Background(), Input{
+		State:       readyState(),
+		AirportIATA: "PVG",
+		Progress:    domain.JourneyProgress{Location: &domain.Coordinate{Lat: 31.2304, Lng: 121.4737}},
+	})
+
+	if len(got.Actions) != 1 || got.Actions[0].Nav == nil {
+		t.Fatalf("行动与导航链接都该保留：%+v", got.Actions)
+	}
+	nav := got.Actions[0].Nav
+	if !strings.Contains(nav.App, "slat=") || !strings.Contains(nav.Web, "from=") {
+		t.Fatalf("导航链接应带上旅客定位：%+v", nav)
+	}
+}
+
+// 导航不跟着风险降级一起消失。
+//
+// 这个用例同时钉住两件事：带判断的"立即出发"在关键数据缺失时必须被撤掉，
+// 而"打开地图"这个工具动作必须补回来 —— 否则数据源不全时旅客连地图都打不开，
+// 而那恰恰是最需要自己看路况的时候。
+func TestEnsureAirportNav_SurvivesRiskDowngrade(t *testing.T) {
+	client := &fakeClient{content: `{
+		"stage": "en_route",
+		"risk": "green",
+		"alert": null,
+		"cards": [],
+		"actions": [{"id": "leave_now", "title": "尽快出发", "detail": "预计 52 分钟到机场", "nav": "airport"}],
+		"reasons": []
+	}`}
+
+	state := readyState()
+	state.ETAMin = nil // 路程时间缺失，判断不了来不来得及
+
+	got := NewAgent(client).Evaluate(context.Background(), Input{
+		State:       state,
+		AirportIATA: "PVG",
+		Progress:    domain.JourneyProgress{Location: &domain.Coordinate{Lat: 31.2304, Lng: 121.4737}},
+	})
+
+	if got.Risk != domain.RiskUnknown && got.Risk != domain.RiskYellow {
+		t.Fatalf("关键数据缺失时必须降级（unknown 或 yellow），实际 %s", got.Risk)
+	}
+
+	// 降级后至少有一条带导航链接的行动（可能是模型给的 leave_now，也可能是我们补的 navigate_airport）
+	var navAction *domain.Action
+	for i := range got.Actions {
+		if got.Actions[i].Nav != nil {
+			navAction = &got.Actions[i]
+			break
+		}
+	}
+	if navAction == nil {
+		t.Fatalf("降级后必须至少有一条带导航链接的行动：%+v", got.Actions)
+	}
+	if !strings.Contains(navAction.Nav.App, "dlat=") || !strings.Contains(navAction.Nav.App, "slat=") {
+		t.Fatalf("App 链接应同时带起点与终点：%s", navAction.Nav.App)
+	}
+	if !strings.Contains(navAction.Nav.Web, "to=") || !strings.Contains(navAction.Nav.Web, "from=") {
+		t.Fatalf("Web 链接应同时带起点与终点：%s", navAction.Nav.Web)
+	}
+}
+
+// 没有定位就不给导航：PC 端不会自动补起点，给了就是两个空框。
+func TestEnsureAirportNav_NeedsLocation(t *testing.T) {
+	got := NewAgent(nil).Evaluate(context.Background(), Input{
+		State:       readyState(),
+		AirportIATA: "PVG",
+	})
+
+	if len(got.Actions) != 0 {
+		t.Fatalf("没有定位时不该给导航，实际 %d 条", len(got.Actions))
+	}
+}
+
+// 人已经进了机场（或已经起飞）就不用再"导航到机场"。
+func TestEnsureAirportNav_SkippedWhenAlreadyAtAirport(t *testing.T) {
+	in := locatedInput("PVG")
+
+	for _, stage := range []string{
+		domain.StageAtAirport,
+		domain.StageCheckIn,
+		domain.StageSecurity,
+		domain.StageWaiting,
+		domain.StageBoarding,
+		domain.StageDeparted,
+		domain.StageDisrupted,
+	} {
+		result := domain.NewAdvice()
+		result.Stage = stage
+
+		ensureAirportNav(&result, in)
+
+		if len(result.Actions) != 0 {
+			t.Fatalf("阶段 %s 不该再给导航，实际 %d 条", stage, len(result.Actions))
+		}
+	}
+}
+
+// 模型已经给过带导航的行动时，不重复添加。
+func TestEnsureAirportNav_NoDuplicate(t *testing.T) {
+	in := locatedInput("PVG")
+
+	result := domain.NewAdvice()
+	result.Stage = domain.StageEnRoute
+	result.Actions = []domain.Action{
+		{ID: "leave_now", Title: "尽快出发", Detail: "现在走", Nav: BuildAirportNav("PVG", in.Progress.Location)},
+	}
+
+	ensureAirportNav(&result, in)
+
+	if len(result.Actions) != 1 {
+		t.Fatalf("不该重复添加，实际 %d 条", len(result.Actions))
+	}
+}
+
+// 三字码不在对照表里时不猜目的地。
+func TestEnsureAirportNav_SkippedForUnknownAirport(t *testing.T) {
+	in := locatedInput("ZZZ")
+
+	result := domain.NewAdvice()
+	result.Stage = domain.StageEnRoute
+
+	ensureAirportNav(&result, in)
+
+	if len(result.Actions) != 0 {
+		t.Fatalf("查不到机场时不该给导航，实际 %d 条", len(result.Actions))
+	}
+}
+
+func locatedInput(iata string) Input {
+	return Input{
+		AirportIATA: iata,
+		Progress:    domain.JourneyProgress{Location: &domain.Coordinate{Lat: 31.2304, Lng: 121.4737}},
+	}
+}
+
+func findAction(t *testing.T, actions []domain.Action, id string) domain.Action {
+	t.Helper()
+	for _, a := range actions {
+		if a.ID == id {
+			return a
+		}
+	}
+	t.Fatalf("没有找到 id=%s 的行动：%+v", id, actions)
+	return domain.Action{}
+}
+
+// 坐标转换的边界：境外原样返回，境内偏移量在合理范围。
+//
+// 不比对某个"标准答案"——GCJ-02 的偏移公式本身是拟合出来的。
+// 要保证的是量级和方向没错：漏转和瞎转都会被量级检查抓住。
+func TestWGS84ToGCJ02(t *testing.T) {
+	if lng, lat := geo.WGS84ToGCJ02(-0.1276, 51.5074); lng != -0.1276 || lat != 51.5074 {
+		t.Fatalf("境外坐标不应偏移，实际 %v,%v", lng, lat)
+	}
+
+	lng, lat := geo.WGS84ToGCJ02(121.4737, 31.2304) // 上海
+	dlng, dlat := lng-121.4737, lat-31.2304
+	if dlng == 0 && dlat == 0 {
+		t.Fatal("境内坐标必须发生偏移，否则说明忘了转")
+	}
+	if math.Abs(dlng) > 0.01 || math.Abs(dlat) > 0.01 {
+		t.Fatalf("偏移量过大（超过约 1 公里）：%v,%v", dlng, dlat)
+	}
+}
+
+// queryParam 取出链接里的一个查询参数。u.Query() 会做 URL 解码，
+// 这里只关心坐标部分，解码不影响断言。
+func queryParam(t *testing.T, raw, key string) string {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("解析链接失败 %s: %v", raw, err)
+	}
+	value := u.Query().Get(key)
+	if value == "" {
+		t.Fatalf("链接里没有参数 %s：%s", key, raw)
+	}
+	return value
+}
+
+// coordPair 解析 "经度,纬度" 形式的前两个分量。
+func coordPair(t *testing.T, value string) (float64, float64) {
+	t.Helper()
+	parts := strings.SplitN(value, ",", 3)
+	if len(parts) < 2 {
+		t.Fatalf("坐标格式不对: %q", value)
+	}
+	lng, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+	if err != nil {
+		t.Fatalf("经度解析失败 %q: %v", parts[0], err)
+	}
+	lat, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+	if err != nil {
+		t.Fatalf("纬度解析失败 %q: %v", parts[1], err)
+	}
+	return lng, lat
 }
 
 func hasReason(reasons []string, keyword string) bool {

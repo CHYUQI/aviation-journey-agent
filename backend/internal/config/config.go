@@ -18,11 +18,24 @@ const EnvFileEnvVar = "AJA_ENV_FILE"
 
 // Config 是服务的全部运行配置。
 type Config struct {
-	Addr string
-	// EnvFile 是实际加载的 .env 路径；空字符串表示没有找到 .env。
+	Addr    string
 	EnvFile string
 	Model   ModelConfig
+	Amap    AmapConfig
 }
+
+// AmapConfig 是高德 Web 服务的配置。
+//
+// 用来调"驾车路径规划"接口算"到机场要多久"。
+// Key 为空时路程时间技能会优雅降级为"尚未接入"issue，不影响其他字段。
+type AmapConfig struct {
+	APIKey  string
+	BaseURL string
+	Timeout time.Duration
+}
+
+// Configured 表示高德路径规划是否配好。
+func (a AmapConfig) Configured() bool { return a.APIKey != "" }
 
 // ModelConfig 是模型服务配置。
 //
@@ -68,6 +81,11 @@ func Load() Config {
 	return Config{
 		Addr:    getenv("SERVER_ADDR", ":8080"),
 		EnvFile: envFile,
+		Amap: AmapConfig{
+			APIKey:  os.Getenv("AMAP_KEY"),
+			BaseURL: getenv("AMAP_DIRECTION_URL", "https://restapi.amap.com/v3/direction/driving"),
+			Timeout: getduration("AMAP_TIMEOUT", 10*time.Second),
+		},
 		Model: ModelConfig{
 			BaseURL:        strings.TrimRight(os.Getenv("MODEL_BASE_URL"), "/"),
 			APIKey:         os.Getenv("MODEL_API_KEY"),
