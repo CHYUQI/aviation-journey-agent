@@ -244,6 +244,7 @@ button { font: inherit; }
   padding: 26px 28px;
   box-shadow: var(--shadow-sm);
   border: 1px solid transparent;
+  overflow: hidden;
   animation: rise 0.55s var(--ease) backwards;
   animation-delay: 0.18s;
 }

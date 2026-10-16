@@ -32,3 +32,30 @@ export type CreateJourneyRequest = Schemas['CreateJourneyRequest']
 export type UpdateLocationRequest = Schemas['UpdateLocationRequest']
 export type AnalysisAccepted = Schemas['AnalysisAccepted']
 export type ApiErrorResponse = Schemas['Error']
+
+// ---- 枚举中文标签（纯展示映射，不参与业务判断） ----
+export const AnalysisStatusLabel: Record<AnalysisStatus, string> = {
+  processing: '分析中',
+  ready: '已就绪',
+  failed: '分析失败',
+}
+
+export const StageLabel: Record<Stage, string> = {
+  unknown: '未知',
+  en_route: '前往机场',
+  at_airport: '已到机场',
+  check_in: '办理值机',
+  security: '安检中',
+  waiting: '候机中',
+  boarding: '登机中',
+  departed: '已起飞',
+  disrupted: '行程中断',
+}
+
+export const RiskLabel: Record<Risk, string> = {
+  unknown: '未知',
+  green: '低风险',
+  yellow: '需关注',
+  orange: '较高风险',
+  red: '高风险',
+}

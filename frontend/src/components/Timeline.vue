@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Stage, TimelineNode } from '../types'
+import { StageLabel } from '../types'
 
 const props = defineProps<{
   timeline: TimelineNode[]
@@ -30,7 +31,7 @@ const activeIndex = computed(() => {
   <section class="panel">
     <div class="panel-heading">
       <h2>行程时间轴</h2>
-      <span>{{ stage }}</span>
+      <span>{{ StageLabel[stage] }}</span>
     </div>
 
     <ol v-if="timeline.length" class="timeline">
