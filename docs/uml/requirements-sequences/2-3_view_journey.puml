@@ -1,0 +1,110 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 15
+skinparam dpi 200
+skinparam backgroundColor white
+skinparam monochrome true
+skinparam sequenceArrowColor #303030
+skinparam sequenceActorBorderColor #303030
+skinparam sequenceActorBackgroundColor white
+skinparam shadowing false
+skinparam roundcorner 0
+skinparam sequenceMessageAlign center
+skinparam sequenceArrowThickness 1.2
+skinparam sequenceParticipantBorderColor #303030
+skinparam sequenceParticipantBackgroundColor white
+skinparam sequenceLifeLineBorderColor #505050
+skinparam sequenceLifeLineBorderThickness 1.8
+skinparam sequenceLifeLineBackgroundColor white
+skinparam sequenceGroupBorderColor #666666
+skinparam sequenceGroupBackgroundColor #F4F4F4
+skinparam sequenceGroupHeaderFontColor #202020
+skinparam sequenceDividerBackgroundColor #F4F4F4
+skinparam sequenceDividerBorderColor #888888
+skinparam noteBackgroundColor #FAFAFA
+skinparam noteBorderColor #999999
+skinparam maxMessageSize 220
+hide footbox
+autonumber
+
+title 图2-3 查看行程状态与建议用例顺序图
+
+actor "旅客" as Traveller
+boundary "行程页面\n<<boundary>>" as Page
+control "行程查看\n<<control>>" as Viewing
+entity "行程记录\n<<entity>>" as Record
+
+Traveller -> Page : 进入已有行程页面
+activate Page
+opt 当前设备保存过行程信息
+    ref over Page, Viewing
+        尝试恢复原行程；无法打开时，
+        根据已保存信息按创建行程流程处理
+    end ref
+end
+
+Page -> Viewing : 查看当前行程
+activate Viewing
+Viewing -> Record : 读取当前完整行程结果
+activate Record
+Record --> Viewing : 返回已有结果或行程不存在
+deactivate Record
+Viewing --> Page : 返回本次查看情况
+
+alt 行程无法找到且无法恢复
+    Page --> Traveller : 说明情况，允许重新填写
+else 行程可以查看
+    alt 正在分析
+        Page --> Traveller : 显示正在分析，\n暂不显示风险判断和行动建议
+    else 已有可用结果
+        Page --> Traveller : 展示行程、时间安排、\n行动及依据和更新时间
+    else 本次分析未能完成
+        Page --> Traveller : 显示原因和重新分析入口；\n较早内容保留时明确其时间和限制
+    end
+
+    Page ->> Viewing : 持续查看行程后续变化
+    Viewing -> Record : 读取当前完整结果
+    activate Record
+    Record --> Viewing : 当前完整结果
+    deactivate Record
+    Viewing ->> Page : 自动送达当前结果
+
+    loop 页面保持打开
+        alt 已有新的行程结果
+            Viewing -> Record : 读取新的完整结果
+            activate Record
+            Record --> Viewing : 新的完整结果
+            deactivate Record
+            Viewing ->> Page : 自动送达新的完整结果
+            Page ->> Traveller : 一并更新行程内容
+            opt 出现与上次不同的重要提醒
+                Page ->> Traveller : 提示当前最需注意的事项
+            end
+        else 自动更新暂时受到影响
+            Page --> Traveller : 提示更新可能不及时
+            Page -> Page : 尝试恢复自动更新
+            Page -> Viewing : 定期查看当前可用结果
+            Viewing -> Record : 读取已有完整结果
+            activate Record
+            Record --> Viewing : 当前可用结果
+            deactivate Record
+            Viewing --> Page : 返回完整结果
+        else 自动更新恢复
+            Viewing -> Record : 读取恢复后的当前结果
+            activate Record
+            Record --> Viewing : 当前完整结果
+            deactivate Record
+            Viewing ->> Page : 自动送达完整结果
+            Page -> Page : 停止临时采用的定期查看
+            deactivate Page
+        end
+    end
+end
+
+deactivate Viewing
+
+note over Page, Record
+查看只展示已有结果，不触发新的分析。
+信息不足时说明限制，不给出“可以放心”的结论。
+end note
+@enduml

@@ -1,0 +1,112 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 15
+skinparam dpi 200
+skinparam backgroundColor white
+skinparam monochrome true
+skinparam sequenceArrowColor #303030
+skinparam sequenceActorBorderColor #303030
+skinparam sequenceActorBackgroundColor white
+skinparam shadowing false
+skinparam roundcorner 0
+skinparam sequenceMessageAlign center
+skinparam sequenceArrowThickness 1.2
+skinparam sequenceParticipantBorderColor #303030
+skinparam sequenceParticipantBackgroundColor white
+skinparam sequenceLifeLineBorderColor #505050
+skinparam sequenceLifeLineBorderThickness 1.8
+skinparam sequenceLifeLineBackgroundColor white
+skinparam sequenceGroupBorderColor #666666
+skinparam sequenceGroupBackgroundColor #F4F4F4
+skinparam sequenceGroupHeaderFontColor #202020
+skinparam sequenceDividerBackgroundColor #F4F4F4
+skinparam sequenceDividerBorderColor #888888
+skinparam noteBackgroundColor #FAFAFA
+skinparam noteBorderColor #999999
+skinparam maxMessageSize 220
+hide footbox
+autonumber
+
+title 图2-4 更新位置或确认所处环节用例顺序图
+
+actor "旅客" as Traveller
+boundary "进度更新页面\n<<boundary>>" as Page
+control "行程处理\n<<control>>" as Journey
+entity "行程与进度记录\n<<entity>>" as Record
+participant "航班与机场\n信息提供方" as Provider
+
+alt 旅客选择提供位置且获取成功
+    Traveller -> Page : 主动同意获取并提供当前位置
+    activate Page
+else 旅客选择确认环节，或位置无法获得
+    Page --> Traveller : 提供自行确认所处环节的入口
+    Traveller -> Page : 选择当前所处环节
+end
+
+== 提交进度与确认接收 ==
+Page -> Journey : 提交位置、所处环节或两者
+activate Journey
+Journey -> Journey : 检查位置完整性及环节有效性
+Journey -> Record : 查找对应行程
+activate Record
+Record --> Journey : 行程存在情况
+deactivate Record
+
+alt 位置不完整、未提供进度或环节无效
+    Journey --> Page : 指出问题，不覆盖已有进度
+    Page --> Traveller : 提示修改后再次提交
+else 行程无法找到
+    Journey --> Page : 说明行程无法找到
+    Page --> Traveller : 提示重新打开或创建行程
+else 信息有效且行程存在
+    alt 仅提供位置
+        Journey -> Record : 更新位置，清除此前手动确认的环节
+        activate Record
+    else 仅确认所处环节
+        Journey -> Record : 保留已有位置，记录本次确认的环节
+    else 同时提供位置和所处环节
+        Journey -> Record : 采用本次位置和本次确认的环节
+    end
+    Record --> Journey : 进度记录完成
+    deactivate Record
+    Journey -> Record : 记录正在分析
+    activate Record
+    Journey --> Page : 已接收，正在分析
+    deactivate Record
+    Page --> Traveller : 显示正在分析
+end
+
+opt 进度已接收
+    == 根据最新进度形成结果 ==
+    opt 前一次处理尚未结束
+        Journey -> Journey : 待前次处理结束后继续处理最新进度
+    end
+    Journey -> Record : 读取最新旅客进度
+    activate Record
+    Record --> Journey : 最新位置和已确认环节
+    deactivate Record
+    Journey -> Provider : 获取本次航班与机场信息
+    activate Provider
+    Provider --> Journey : 返回可获得的信息及缺失说明
+    deactivate Provider
+    alt 部分信息暂时无法获得
+        Journey -> Journey : 使用本次可得信息，\n将缺失记为暂无信息并说明影响
+    else 本次信息可获得
+        Journey -> Journey : 整理本次行程情况
+    end
+    Journey -> Journey : 形成环节、时间情况、提醒和行动；\n优先采用旅客本次确认的环节
+    Journey -> Record : 保存新的完整行程结果
+    activate Record
+    Record --> Journey : 保存完成
+    deactivate Record
+    Journey ->> Page : 自动送达新的完整结果
+    Page ->> Traveller : 显示依据最新进度形成的结果
+    deactivate Page
+    deactivate Journey
+end
+
+note over Page, Journey
+位置须完整；位置与所处环节至少提供一项。
+接收成功不代表分析完成，结果形成后自动显示。
+end note
+@enduml

@@ -1,0 +1,58 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 230
+skinparam padding 2
+skinparam dpi 160
+hide footbox
+skinparam maxMessageSize 360
+skinparam sequenceMessageAlign left
+skinparam sequenceMessageFontSize 15
+skinparam sequenceParticipantFontSize 15
+skinparam sequencePadding 2
+actor 旅客 as U
+participant "Dashboard.vue\n创建区 / 仪表盘" as V
+participant "persistedJourney.ts\n本机记录" as P
+participant "useJourneyStore()\n快照状态" as J
+participant "api/journey.ts\n接口封装" as API
+V -> V : onMounted → restoreJourney()
+V -> P : loadSavedJourney()
+P --> V : saved（可为 null）
+alt 首次使用或本机无记录
+ V -> V : return；显示创建区
+ U -> V : 填写表单并点击开始分析
+ V -> V : submit() / validate() / buildPayload()
+ V -> API : createJourney(payload)
+ API --> V : accepted.journeyId
+ V -> P : saveJourney(id, payload)
+ V -> V : journeyId = id
+else 打开时本机存在记录
+ V -> V : form = saved.payload
+ note over V,J
+ 优先加载已保存 ID；加载失败时，
+ 按 saved.payload 重新创建并保存新 ID。
+ end note
+end
+V -> J : load(id)
+J -> API : getState(id)
+API --> J : 当前 snapshot
+J -> API : createStream(id, apply)
+API -> J : snapshot 事件 → apply(next)
+J --> V : snapshot 更新；ready 时更新 lastReady
+V -> V : restore 分支加载成功后设置 journeyId；渲染 display
+ref over V,API : failed 时点击 retry()：重新创建、保存并 load 新行程
+opt 点击删除行程
+ U -> V : removeJourney()
+ V -> P : clearSavedJourney()
+ V -> J : reset()
+ V -> V : journeyId = null → 返回创建区
+end
+note over V,J : 同一 Dashboard.vue 内切换条件分支，没有额外页面路由。
+
+@enduml

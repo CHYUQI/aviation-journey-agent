@@ -1,0 +1,31 @@
+@startsalt
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 18
+skinparam dpi 180
+{+
+ 航旅智行 | [ 删除行程 ]
+ ==
+ 分析状态 | 当前阶段 | 风险等级
+ SSE 连接状态 | 数据质量 | 更新时间
+ 数据不完整时展示原因说明
+ ==
+ 处理中显示骨架屏
+ 失败时显示错误与重新分析入口
+ [ 重新分析 ]
+ ==
+ 指标卡区域 advice.cards
+ ==
+ { 行程时间轴 | { 下一步行动
+   state.timeline | advice.actions
+   机场信息 | [ 立即导航 仅 nav 非空 ]
+   state.guide | 当前在哪个环节
+   服务端节点时间 | [ 定位并上报 ]
+   按后端顺序展示 | { [ 前往机场 ] | [ 已到机场 ] }
+   不在前端计算风险 | { [ 值机 ] | [ 安检 ] }
+   不内嵌地图 | { [ 候机 ] | [ 登机 ] }
+ } }
+ ==
+ ToastHost 展示变化后的 advice.alert
+}
+
+@endsalt

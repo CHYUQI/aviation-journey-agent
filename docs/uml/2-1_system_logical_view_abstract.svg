@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1510" viewBox="0 0 1400 1510"><defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1L9 5L1 9" fill="none" stroke="#222" stroke-width="1.5"/></marker></defs><rect width="100%" height="100%" fill="white"/><g font-family="Microsoft YaHei, sans-serif" fill="#111">
+<text x="700" y="49" font-size="30" font-weight="700" text-anchor="middle">系统逻辑视图</text>
+<rect x="50" y="90" width="1300" height="230" fill="white" stroke="#222" stroke-width="1.7"/>
+<text x="700.0" y="123" font-size="24" font-weight="700" text-anchor="middle">用户界面层</text>
+<rect x="85" y="150" width="380" height="140" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="275.0" y="173" font-size="17" font-weight="400" text-anchor="middle">«boundary»</text>
+<text x="275.0" y="199" font-size="21" font-weight="700" text-anchor="middle">行程创建界面</text>
+<path d="M85 212 L465 212" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="98" y="240" font-size="21" font-weight="400" text-anchor="start">+录入行程与行李信息()</text>
+<text x="98" y="268" font-size="21" font-weight="400" text-anchor="start">+提交行程()</text>
+<rect x="510" y="150" width="380" height="140" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="700.0" y="173" font-size="17" font-weight="400" text-anchor="middle">«boundary»</text>
+<text x="700.0" y="199" font-size="21" font-weight="700" text-anchor="middle">行程状态界面</text>
+<path d="M510 212 L890 212" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="523" y="240" font-size="21" font-weight="400" text-anchor="start">+展示状态、风险与行动建议()</text>
+<text x="523" y="268" font-size="21" font-weight="400" text-anchor="start">+展示时间轴与提醒()</text>
+<rect x="935" y="150" width="380" height="140" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="1125.0" y="173" font-size="17" font-weight="400" text-anchor="middle">«boundary»</text>
+<text x="1125.0" y="199" font-size="21" font-weight="700" text-anchor="middle">位置、阶段与导航界面</text>
+<path d="M935 212 L1315 212" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="948" y="240" font-size="21" font-weight="400" text-anchor="start">+上报位置与确认阶段()</text>
+<text x="948" y="268" font-size="21" font-weight="400" text-anchor="start">+响应导航点击()</text>
+<rect x="50" y="440" width="1300" height="260" fill="white" stroke="#222" stroke-width="1.7"/>
+<text x="700.0" y="473" font-size="24" font-weight="700" text-anchor="middle">业务逻辑层</text>
+<rect x="85" y="500" width="280" height="170" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="225.0" y="523" font-size="17" font-weight="400" text-anchor="middle">«control»</text>
+<text x="225.0" y="549" font-size="21" font-weight="700" text-anchor="middle">行程编排控制</text>
+<path d="M85 562 L365 562" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="98" y="590" font-size="21" font-weight="400" text-anchor="start">+创建与更新行程()</text>
+<text x="98" y="618" font-size="21" font-weight="400" text-anchor="start">+组织分析与重算()</text>
+<text x="98" y="646" font-size="21" font-weight="400" text-anchor="start">+协调状态与建议()</text>
+<rect x="405" y="500" width="280" height="170" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="545.0" y="523" font-size="17" font-weight="400" text-anchor="middle">«control»</text>
+<text x="545.0" y="549" font-size="21" font-weight="700" text-anchor="middle">数据感知控制</text>
+<path d="M405 562 L685 562" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="418" y="590" font-size="21" font-weight="400" text-anchor="start">+获取与核验观测()</text>
+<text x="418" y="618" font-size="21" font-weight="400" text-anchor="start">+形成行程状态()</text>
+<text x="418" y="646" font-size="21" font-weight="400" text-anchor="start">+评估数据质量()</text>
+<rect x="725" y="500" width="280" height="170" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="865.0" y="523" font-size="17" font-weight="400" text-anchor="middle">«control»</text>
+<text x="865.0" y="549" font-size="21" font-weight="700" text-anchor="middle">行动决策控制</text>
+<path d="M725 562 L1005 562" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="738" y="590" font-size="21" font-weight="400" text-anchor="start">+分析阶段与风险()</text>
+<text x="738" y="618" font-size="21" font-weight="400" text-anchor="start">+生成行动建议()</text>
+<text x="738" y="646" font-size="21" font-weight="400" text-anchor="start">+执行风险约束()</text>
+<rect x="1045" y="500" width="280" height="170" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="1185.0" y="523" font-size="17" font-weight="400" text-anchor="middle">«control»</text>
+<text x="1185.0" y="549" font-size="21" font-weight="700" text-anchor="middle">快照与通知控制</text>
+<path d="M1045 562 L1325 562" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="1058" y="590" font-size="21" font-weight="400" text-anchor="start">+组织完整快照()</text>
+<text x="1058" y="618" font-size="21" font-weight="400" text-anchor="start">+管理状态订阅()</text>
+<text x="1058" y="646" font-size="21" font-weight="400" text-anchor="start">+发布状态更新()</text>
+<path d="M365 585 L405 585" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M685 585 L725 585" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M1005 585 L1045 585" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M280 320 L280 440" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="300" y="383" font-size="20" font-weight="400" text-anchor="start">行程请求／位置与阶段上报</text>
+<path d="M1110 440 L1110 320" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="1090" y="383" font-size="20" font-weight="400" text-anchor="end">状态、建议与提醒</text>
+<rect x="50" y="820" width="610" height="550" fill="white" stroke="#222" stroke-width="1.7"/>
+<text x="355.0" y="853" font-size="24" font-weight="700" text-anchor="middle">数据层</text>
+<rect x="225" y="880" width="260" height="112" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="355.0" y="903" font-size="17" font-weight="400" text-anchor="middle">«entity»</text>
+<text x="355.0" y="929" font-size="21" font-weight="700" text-anchor="middle">行程快照</text>
+<path d="M225 942 L485 942" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="238" y="970" font-size="21" font-weight="400" text-anchor="start">-分析状态与错误信息</text>
+<rect x="70" y="1055" width="175" height="140" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="157.5" y="1078" font-size="17" font-weight="400" text-anchor="middle">«entity»</text>
+<text x="157.5" y="1104" font-size="21" font-weight="700" text-anchor="middle">行程</text>
+<path d="M70 1117 L245 1117" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="83" y="1145" font-size="19" font-weight="400" text-anchor="start">-行程标识</text>
+<text x="83" y="1173" font-size="19" font-weight="400" text-anchor="start">-航段与行李</text>
+<rect x="265" y="1055" width="175" height="140" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="352.5" y="1078" font-size="17" font-weight="400" text-anchor="middle">«entity»</text>
+<text x="352.5" y="1104" font-size="21" font-weight="700" text-anchor="middle">行程状态</text>
+<path d="M265 1117 L440 1117" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="278" y="1145" font-size="19" font-weight="400" text-anchor="start">-航班与时间轴</text>
+<text x="278" y="1173" font-size="19" font-weight="400" text-anchor="start">-数据质量</text>
+<rect x="460" y="1055" width="175" height="140" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="547.5" y="1078" font-size="17" font-weight="400" text-anchor="middle">«entity»</text>
+<text x="547.5" y="1104" font-size="21" font-weight="700" text-anchor="middle">行动建议</text>
+<path d="M460 1117 L635 1117" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="473" y="1145" font-size="17" font-weight="400" text-anchor="start">-阶段与风险</text>
+<text x="473" y="1173" font-size="17" font-weight="400" text-anchor="start">-提醒、卡片与行动</text>
+<rect x="225" y="1240" width="260" height="100" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="355.0" y="1263" font-size="17" font-weight="400" text-anchor="middle">«entity»</text>
+<text x="355.0" y="1289" font-size="21" font-weight="700" text-anchor="middle">位置进度</text>
+<path d="M225 1302 L485 1302" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="238" y="1330" font-size="19" font-weight="400" text-anchor="start">-当前位置与确认阶段</text>
+<path d="M355 992 l-7 10 l7 10 l7 -10 Z" fill="#222" stroke="#222"/>
+<path d="M355 1012 L355 1025 L157.5 1025 L157.5 1055" fill="none" stroke="#222" stroke-width="1.5"/>
+<path d="M355 1025 L352.5 1025 L352.5 1055" fill="none" stroke="#222" stroke-width="1.5"/>
+<path d="M355 1025 L547.5 1025 L547.5 1055" fill="none" stroke="#222" stroke-width="1.5"/>
+<rect x="720" y="820" width="630" height="250" fill="white" stroke="#222" stroke-width="1.7"/>
+<text x="1035.0" y="853" font-size="24" font-weight="700" text-anchor="middle">外部服务接口层</text>
+<rect x="750" y="880" width="270" height="150" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="885.0" y="903" font-size="17" font-weight="400" text-anchor="middle">«interface»</text>
+<text x="885.0" y="929" font-size="21" font-weight="700" text-anchor="middle">聚合数据接口</text>
+<path d="M750 942 L1020 942" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="763" y="970" font-size="20" font-weight="400" text-anchor="start">+查询航班与机场信息()</text>
+<text x="763" y="998" font-size="20" font-weight="400" text-anchor="start">+提供观测与问题说明()</text>
+<rect x="1050" y="880" width="270" height="150" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="1185.0" y="903" font-size="17" font-weight="400" text-anchor="middle">«interface»</text>
+<text x="1185.0" y="929" font-size="21" font-weight="700" text-anchor="middle">模型服务接口</text>
+<path d="M1050 942 L1320 942" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="1063" y="970" font-size="20" font-weight="400" text-anchor="start">+请求生成行动建议()</text>
+<text x="1063" y="998" font-size="20" font-weight="400" text-anchor="start">+返回候选决策结果()</text>
+<path d="M225 700 L225 820" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="243" y="770" font-size="19" font-weight="400" text-anchor="start">组织与维护行程信息</text>
+<path d="M545 670 L545 745 L885 745 L885 820" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="635" y="730" font-size="19" font-weight="400" text-anchor="start">获取观测</text>
+<path d="M865 670 L865 715 L1185 715 L1185 820" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="1055" y="780" font-size="19" font-weight="400" text-anchor="start">辅助生成建议</text>
+<rect x="720" y="1190" width="630" height="230" fill="white" stroke="#222" stroke-width="1.7"/>
+<text x="1035.0" y="1223" font-size="24" font-weight="700" text-anchor="middle">外部系统</text>
+<rect x="745" y="1250" width="190" height="140" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="840.0" y="1273" font-size="17" font-weight="400" text-anchor="middle">«external»</text>
+<text x="840.0" y="1299" font-size="21" font-weight="700" text-anchor="middle">航班与机场数据源</text>
+<path d="M745 1312 L935 1312" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="758" y="1340" font-size="17" font-weight="400" text-anchor="start">航班与机场信息</text>
+<text x="758" y="1368" font-size="17" font-weight="400" text-anchor="start">EOOB 聚合源</text>
+<rect x="950" y="1250" width="190" height="140" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="1045.0" y="1273" font-size="17" font-weight="400" text-anchor="middle">«external»</text>
+<text x="1045.0" y="1299" font-size="21" font-weight="700" text-anchor="middle">大模型服务</text>
+<path d="M950 1312 L1140 1312" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="963" y="1340" font-size="18" font-weight="400" text-anchor="start">建议生成能力</text>
+<rect x="1155" y="1250" width="170" height="140" fill="white" stroke="#555" stroke-width="1.1"/>
+<text x="1240.0" y="1273" font-size="17" font-weight="400" text-anchor="middle">«external»</text>
+<text x="1240.0" y="1299" font-size="21" font-weight="700" text-anchor="middle">地图应用／网页</text>
+<path d="M1155 1312 L1325 1312" fill="none" stroke="#222" stroke-width="1.5"/>
+<text x="1168" y="1340" font-size="18" font-weight="400" text-anchor="start">旅客自主导航</text>
+<path d="M885 1030 L885 1120 L840 1120 L840 1250" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)" stroke-dasharray="7 5"/>
+<text x="790" y="1160" font-size="19" font-weight="400" text-anchor="start">数据访问</text>
+<path d="M1185 1030 L1185 1145 L1045 1145 L1045 1250" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)" stroke-dasharray="7 5"/>
+<text x="1065" y="1180" font-size="19" font-weight="400" text-anchor="start">模型调用</text>
+<path d="M1315 220 L1380 220 L1380 1320 L1325 1320" fill="none" stroke="#222" stroke-width="1.5" marker-end="url(#a)" stroke-dasharray="7 5"/>
+<text transform="translate(1373 1040) rotate(-90)" font-size="19" text-anchor="middle">由界面发起导航跳转</text>
+<text x="700" y="1460" font-size="20" font-weight="400" text-anchor="middle">界面负责展示与上报；业务层统一编排，先感知数据再生成建议。</text>
+</g></svg>

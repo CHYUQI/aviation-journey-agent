@@ -1,0 +1,30 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+autonumber
+participant "advice 包" as A
+participant "NavigateButton.vue" as UI
+participant "地图应用或网页" as MAP
+== 重算时准备工具链接 ==
+A -> A : BuildAirportNav(iata, origin)
+note over A : 查静态机场坐标 转为GCJ-02\n机场未收录则返回nil\nensureAirportNav 可补充工具行动
+== 用户点击已有行动 ==
+UI -> UI : open()\n启动1200毫秒回退计时
+UI -> MAP : window.location.href = nav.app
+alt 页面可见性变化
+ UI -> UI : visibilitychange 回调\n清除网页回退计时
+else 计时到期
+ UI -> MAP : window.location.href = nav.web
+end
+note over UI,MAP : 仅 action.nav 非空时渲染按钮\n没有导航后端接口 不内嵌地图SDK
+
+@enduml

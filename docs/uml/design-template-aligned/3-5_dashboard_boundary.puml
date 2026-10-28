@@ -1,0 +1,72 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 230
+skinparam padding 2
+skinparam dpi 160
+hide footbox
+top to bottom direction
+class "views/Dashboard.vue" as V <<Vue boundary>> {
+ snapshot / display / journeyId / toasts
+ --
+ retry()
+ removeJourney()
+}
+class "stores/journey.ts\nuseJourneyStore()" as J <<Pinia setup store>> {
+ snapshot / lastReady
+ connected / fallbackActive
+ --
+ load(id)
+ stop()
+ reset()
+}
+class "components/StageConfirm.vue" as ST <<Vue boundary>> {
+ journeyId / disabled : props
+ pending / locating
+ --
+ pick(stage)
+ reportLocation()
+}
+class "stores/location.ts\nuseLocation()" as LOC <<composable closure>> {
+ granted / error
+ --
+ locate(journeyId)
+ confirmStage(journeyId, stage)
+}
+class "components/NavigateButton.vue" as NAV <<Vue boundary>> {
+ nav : props
+ --
+ open()
+}
+V --> J : 渲染快照
+V --> ST : 子组件
+ST --> LOC
+V --> NAV : 经 ActionCardList\n仅 action.nav 非空
+note top of V
+动态元素 D1–D4：StatusBar / FreshnessBar、
+Timeline / ActionCardList 按 props 展示。
+MetricsRow / ToastHost 也按 props 展示。
+processing 显示骨架；failed 显示错误及重新分析。
+命令 C1：删除行程 → removeJourney()。
+失败态命令：重新分析 → retry()。
+end note
+note bottom of ST
+输入元素 I1：六个手动阶段选项。
+命令 C2：定位并上报 → reportLocation()。
+命令 C3：阶段按钮 → pick(stage)。
+动态元素：pending / locating / granted / error。
+定位只在点击后调用，不持续跟踪。
+end note
+note bottom of NAV
+命令：立即导航 → open()。
+按钮随 action.nav 条件显示；
+截图无导航数据时不显示该按钮。
+end note
+
+@enduml

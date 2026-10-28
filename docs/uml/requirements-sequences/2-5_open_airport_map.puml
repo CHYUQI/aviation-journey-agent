@@ -1,0 +1,89 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 15
+skinparam dpi 200
+skinparam backgroundColor white
+skinparam monochrome true
+skinparam sequenceArrowColor #303030
+skinparam sequenceActorBorderColor #303030
+skinparam sequenceActorBackgroundColor white
+skinparam shadowing false
+skinparam roundcorner 0
+skinparam sequenceMessageAlign center
+skinparam sequenceArrowThickness 1.2
+skinparam sequenceParticipantBorderColor #303030
+skinparam sequenceParticipantBackgroundColor white
+skinparam sequenceLifeLineBorderColor #505050
+skinparam sequenceLifeLineBorderThickness 1.8
+skinparam sequenceLifeLineBackgroundColor white
+skinparam sequenceGroupBorderColor #666666
+skinparam sequenceGroupBackgroundColor #F4F4F4
+skinparam sequenceGroupHeaderFontColor #202020
+skinparam noteBackgroundColor #FAFAFA
+skinparam noteBorderColor #999999
+skinparam maxMessageSize 220
+hide footbox
+autonumber
+
+title 图2-5 打开前往出发机场的地图用例顺序图
+
+actor "旅客" as Traveller
+boundary "行程页面\n<<boundary>>" as Page
+control "导航处理\n<<control>>" as Navigation
+entity "当前行动建议\n<<entity>>" as Advice
+participant "外部地图应用" as MapApp
+participant "外部地图网页" as MapWeb
+
+note over Page, Advice
+地图入口随行程结果提供，点击时直接使用已有入口。
+end note
+
+Page -> Navigation : 获取已有地图入口
+activate Page
+activate Navigation
+Navigation -> Advice : 读取本次行动中的地图入口
+activate Advice
+Advice --> Navigation : 可用地图入口或无入口
+deactivate Advice
+Navigation --> Page : 返回已有入口情况
+deactivate Navigation
+
+alt 无可用入口，或当前不需要前往机场
+    Page --> Traveller : 不显示地图按钮，继续展示行程信息
+else 已有可用地图入口
+    Page --> Traveller : 显示前往出发机场的地图按钮
+    Traveller -> Page : 点击地图按钮
+    Page -> Navigation : 打开已有地图入口
+    activate Navigation
+    Navigation ->> MapApp : 尝试打开前往出发机场的地图
+    activate MapApp
+
+    alt 地图应用成功打开
+        MapApp ->> Traveller : 展示前往出发机场的路线和导航
+        deactivate MapApp
+    else 地图应用未能打开
+        Navigation ->> MapWeb : 打开前往出发机场的地图网页
+        activate MapWeb
+        MapWeb ->> Traveller : 页面可用时展示路线和导航
+        deactivate MapWeb
+    end
+    deactivate Navigation
+
+    opt 旅客返回行程页面
+        Traveller -> Page : 继续查看行程和建议
+        Page --> Traveller : 展示当前可用行程信息
+        deactivate Page
+    end
+end
+
+note over Page, MapWeb
+外部地图无法打开时，旅客可自行选择其他方式。
+打开地图不改变所处环节，也不证明旅客已到达机场。
+end note
+
+note over Advice
+目的地为出发机场的一般位置，
+不提供机场内部详细路线，
+不记录旅客行驶轨迹。
+end note
+@enduml

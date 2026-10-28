@@ -1,0 +1,35 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+autonumber
+participant "Dashboard.vue" as UI
+participant "JourneyHandler" as H
+participant "Runtime" as R
+participant "MemoryStore" as S
+participant "SSEHub" as HUB
+UI -> H : POST /api/v1/journey
+H -> H : Create(c)\nShouldBindJSON / req.Validate()
+alt 参数非法
+ H --> UI : 400 + error
+else 参数有效
+ H -> R : CreateJourney(journey)
+ R -> S : SaveJourney(journey)
+ R -> S : SaveProgress(id, JourneyProgress{})
+ R -> R : publishProcessing(journey)\nfinish(id, snapshot)
+ R -> S : SaveSnapshot(snapshot)
+ R -> HUB : Publish(id, snapshot)
+ R -> R : analyzeAsync(id)\n后台 Recalculate(ctx, id)
+ H --> UI : 202 + journeyId + processing
+end
+note over UI,H : 内部消息按简化参数表示 完整声明见第4.2节
+
+@enduml

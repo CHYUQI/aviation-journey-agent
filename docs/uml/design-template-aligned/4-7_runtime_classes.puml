@@ -1,0 +1,77 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 230
+skinparam padding 2
+skinparam dpi 160
+hide footbox
+top to bottom direction
+class "api.JourneyHandler" as H {
+ - runtime : *runtime.Runtime
+ --
+ + Create(c)
+ + UpdateLocation(c)
+ + State(c)
+ + Stream(c)
+}
+class "runtime.Runtime" as R {
+ - store : *store.MemoryStore
+ - data : *data.Agent
+ - advice : *advice.Agent
+ - hub : *SSEHub
+ - recalcStates : sync.Map
+ - adviceInputs : sync.Map
+ --
+ + CreateJourney(journey)
+ + ApplyLocation(id, req)
+ + Recalculate(ctx, id)
+ + GetSnapshot(id)
+ + Subscribe(id)
+ + StartPeriodicRefresh(ctx, interval, ids)
+}
+class "store.MemoryStore" as S {
+ - mu : sync.RWMutex
+ - journeys : map[string]domain.Journey
+ - snapshots : map[string]domain.JourneySnapshot
+ - progress : map[string]domain.JourneyProgress
+ --
+ + SaveJourney(journey)
+ + GetJourney(id)
+ + SaveSnapshot(snapshot)
+ + GetSnapshot(id)
+ + SaveProgress(id, progress)
+ + GetProgress(id)
+ + ListJourneyIDs()
+}
+class "runtime.SSEHub" as HUB {
+ - mu : sync.RWMutex
+ - subs : map[string]map[chan domain.JourneySnapshot]struct{}
+ --
+ + Subscribe(id)
+ + Publish(id, snapshot)
+}
+class "data.Agent" as D {
+ - skills : *skill.Registry
+ --
+ + BuildState(ctx, in)
+}
+class "advice.Agent" as A {
+ - client : model.Client
+ --
+ + Evaluate(ctx, in)
+}
+H --> R : 持有
+R --> S : 持有
+R --> HUB : 持有
+R --> D : 持有
+R --> A : 持有
+S -[hidden]down-> D
+HUB -[hidden]down-> A
+
+@enduml

@@ -1,0 +1,50 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 230
+skinparam padding 2
+skinparam dpi 160
+hide footbox
+top to bottom direction
+class "views/Dashboard.vue" as V <<Vue boundary>> {
+ form : CreateJourneyRequest
+ creating : boolean
+ formError : string | null
+ journeyId : string | null
+ --
+ blankForm()
+ buildPayload()
+ validate()
+ submit()
+ restoreJourney()
+}
+class "api/journey.ts" as API <<module>> {
+ createJourney(payload)
+}
+class "stores/persistedJourney.ts" as P <<module>> {
+ saveJourney(journeyId, payload)
+ loadSavedJourney()
+}
+class "stores/journey.ts\nuseJourneyStore()" as J <<Pinia setup store>> {
+ load(id)
+}
+V --> API : 创建行程
+V --> P : 保存与恢复输入
+V --> J : 加载已接受的行程
+note top of V
+输入元素 I1–I4：form.flights[0] 的
+number / date / from / to
+输入元素 I5：form.hasBaggage
+命令元素 C1：开始分析 → submit()
+动态元素 D1：creating 对应禁用与按钮文字
+动态元素 D2：formError 非空时显示错误
+这些字段与函数均属于现有组件闭包。
+end note
+
+@enduml

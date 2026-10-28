@@ -1,0 +1,93 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 15
+skinparam dpi 200
+skinparam backgroundColor white
+skinparam monochrome true
+skinparam sequenceArrowColor #303030
+skinparam sequenceActorBorderColor #303030
+skinparam sequenceActorBackgroundColor white
+skinparam shadowing false
+skinparam roundcorner 0
+skinparam sequenceMessageAlign center
+skinparam sequenceArrowThickness 1.2
+skinparam sequenceParticipantBorderColor #303030
+skinparam sequenceParticipantBackgroundColor white
+skinparam sequenceLifeLineBorderColor #505050
+skinparam sequenceLifeLineBorderThickness 1.8
+skinparam sequenceLifeLineBackgroundColor white
+skinparam sequenceGroupBorderColor #666666
+skinparam sequenceGroupBackgroundColor #F4F4F4
+skinparam sequenceGroupHeaderFontColor #202020
+skinparam sequenceDividerBackgroundColor #F4F4F4
+skinparam sequenceDividerBorderColor #888888
+skinparam noteBackgroundColor #FAFAFA
+skinparam noteBorderColor #999999
+skinparam maxMessageSize 220
+hide footbox
+autonumber
+
+title 图2-2 创建行程用例顺序图
+
+actor "旅客" as Traveller
+boundary "行程页面\n<<boundary>>" as Page
+control "行程处理\n<<control>>" as Journey
+entity "行程记录\n<<entity>>" as Record
+participant "航班与机场\n信息提供方" as Provider
+
+== 提交信息与确认接收 ==
+Traveller -> Page : 填写航班、托运行李情况并提交
+activate Page
+Page -> Journey : 提交行程信息
+activate Journey
+Journey -> Journey : 检查信息完整性与有效性
+
+alt 信息缺失或不符合要求
+    Journey --> Page : 指出需要修改的内容
+    Page --> Traveller : 提示修改后再次提交
+else 信息符合要求
+    Journey -> Record : 建立行程，记录正在分析
+    activate Record
+    Record --> Journey : 行程编号
+    deactivate Record
+    Journey --> Page : 已接收，正在分析（行程编号）
+    Page --> Traveller : 显示行程编号和正在分析
+end
+
+opt 行程已接收
+    == 后续分析与自动显示 ==
+    Journey -> Provider : 获取本次航班与机场信息
+    activate Provider
+    Provider --> Journey : 返回可获得的信息及缺失说明
+    deactivate Provider
+
+    alt 部分信息暂时无法获得
+        Journey -> Journey : 整理本次可用信息，\n缺失内容记为暂无信息并说明影响
+    else 本次信息可获得
+        Journey -> Journey : 整理时间安排及相关说明
+    end
+
+    alt 本次分析可以完成
+        Journey -> Journey : 形成所处环节、时间情况、\n提醒、行动和判断依据
+        opt 暂时无法形成完整建议
+            Journey -> Journey : 说明限制，保留可用行程信息
+        end
+        Journey -> Record : 保存本次完整行程结果
+        activate Record
+    else 本次分析未能完成
+        Journey -> Record : 保存未能完成的结果及原因
+    end
+
+    Record --> Journey : 保存完成
+    deactivate Record
+    Journey ->> Page : 自动送达本次完整结果
+    Page ->> Traveller : 展示可用结果，或原因及重新分析入口
+    deactivate Page
+    deactivate Journey
+end
+
+note over Page, Journey
+结果形成后自动显示，旅客无需再次提交。
+缺少的信息不得用较早结果填补。
+end note
+@enduml

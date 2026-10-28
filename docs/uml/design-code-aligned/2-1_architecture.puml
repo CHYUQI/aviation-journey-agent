@@ -1,0 +1,41 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+!pragma layout smetana
+top to bottom direction
+rectangle "浏览器 Vue 3 + TypeScript" {
+ component "Dashboard.vue / StageConfirm.vue\nuseJourneyStore / useLocation\napi/journey.ts" as FRONT
+}
+rectangle "Go 单进程" {
+ component "api.JourneyHandler" as H
+ component "runtime.Runtime" as R
+ component "data.Agent\nBuildState" as D
+ component "advice.Agent\nEvaluate" as A
+ component "skill.Registry\nQuery" as S
+ component "model.Client\nChat" as M
+ database "store.MemoryStore\n内存映射 非数据库" as ST
+ component "runtime.SSEHub\nSubscribe / Publish" as HUB
+ H --> R
+ R --> D
+ R --> A
+ D --> S
+ A --> M
+ R --> ST
+ R --> HUB
+}
+FRONT --> H : HTTP / SSE
+cloud "EOOB 航班与机场\n高德路程接口 当前实现" as EXT
+cloud "配置的模型端点" as LLM
+S --> EXT : HTTPS
+M --> LLM : HTTPS / JSON
+
+@enduml

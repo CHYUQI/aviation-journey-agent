@@ -1,0 +1,22 @@
+@startsalt
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 18
+skinparam dpi 180
+{+
+ 航旅智行
+ 起飞前行程规划与延误风险预警
+ ==
+ 创建行程 | 填写首个航段信息
+ 航班号 | "                 "
+ 日期 | " YYYY-MM-DD     "
+ 出发机场 | " IATA 三字码    "
+ 到达机场 | " IATA 三字码    "
+ [ ] 携带托运行李
+ [ 开始分析 ]
+ 表单错误在输入区域展示
+ ==
+ 实时延误预警 | 行程时间轴 | 行动建议
+ 行程记录仅保存在本机浏览器
+}
+
+@endsalt

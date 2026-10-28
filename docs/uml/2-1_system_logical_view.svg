@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="2120" viewBox="0 0 1640 2120">
+<title>图2-1 航旅智行系统逻辑视图</title><desc>依据现有前后端开发实现及 docs/api/openapi.yaml 绘制。用户界面经 HTTP 访问 API，Runtime 编排 DataAgent 与 AdviceAgent，统一读写进程内存储，保存后经 SSE 推送完整快照。数据技能只访问 EOOB 与本地估算，导航由前端跳转到地图应用或网页。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="#333333" stroke-width="1.6"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/><g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif">
+<text x="820.0" y="62.400000000000006" font-size="31" font-weight="bold" text-anchor="middle" fill="#222222">图2-1 航旅智行系统逻辑视图</text>
+<text x="820.0" y="99.60000000000001" font-size="19" font-weight="normal" text-anchor="middle" fill="#555555">前端展示与交互 · 后端编排、取数与决策 · 完整快照驱动</text>
+<rect x="50" y="120" width="1540" height="230" fill="#FFFFFF" stroke="#333333" stroke-width="1.6"/>
+<path d="M50,168H1590V120H50Z" fill="#F0F1F2" stroke="#333333" stroke-width="1.6"/>
+<text x="68" y="152" font-size="23" font-weight="bold" text-anchor="start" fill="#222222">用户界面层（浏览器）</text>
+<rect x="80" y="180" width="420" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M80,245H500" stroke="#555555" stroke-width="1.1"/>
+<text x="290.0" y="205" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«boundary»</text>
+<text x="290.0" y="231" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">行程创建界面</text>
+<text x="94" y="274" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+录入航班、日期、机场与行李()</text>
+<text x="94" y="303" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+提交创建请求()</text>
+<rect x="610" y="180" width="420" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M610,245H1030" stroke="#555555" stroke-width="1.1"/>
+<text x="820.0" y="205" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«boundary»</text>
+<text x="820.0" y="231" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">行程仪表盘与提醒</text>
+<text x="624" y="274" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+渲染状态、时间轴、指标与行动()</text>
+<text x="624" y="303" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+按 alert 去重提醒；断线轮询()</text>
+<rect x="1140" y="180" width="420" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M1140,245H1560" stroke="#555555" stroke-width="1.1"/>
+<text x="1350.0" y="205" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«boundary»</text>
+<text x="1350.0" y="231" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">定位、阶段确认与导航</text>
+<text x="1154" y="274" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+授权定位／手动确认阶段()</text>
+<text x="1154" y="303" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+仅 nav 非空时提供导航入口()</text>
+<rect x="50" y="490" width="1540" height="1160" fill="#FFFFFF" stroke="#333333" stroke-width="1.6"/>
+<path d="M50,538H1590V490H50Z" fill="#E9EAEB" stroke="#333333" stroke-width="1.6"/>
+<text x="68" y="522" font-size="23" font-weight="bold" text-anchor="start" fill="#222222">后端应用边界（单个 Go 进程）</text>
+<rect x="80" y="550" width="1480" height="230" fill="#FFFFFF" stroke="#333333" stroke-width="1.6"/>
+<path d="M80,598H1560V550H80Z" fill="#F0F1F2" stroke="#333333" stroke-width="1.6"/>
+<text x="98" y="582" font-size="23" font-weight="bold" text-anchor="start" fill="#222222">服务接入与行程编排层</text>
+<rect x="105" y="610" width="365" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M105,675H470" stroke="#555555" stroke-width="1.1"/>
+<text x="287.5" y="635" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«control»</text>
+<text x="287.5" y="661" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">API 请求处理</text>
+<text x="119" y="704" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+校验请求／返回受理结果()</text>
+<text x="119" y="733" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+查询快照／建立 SSE 订阅()</text>
+<rect x="535" y="610" width="490" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M535,675H1025" stroke="#555555" stroke-width="1.1"/>
+<text x="780.0" y="635" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«control»</text>
+<text x="780.0" y="661" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">行程编排 Runtime</text>
+<text x="549" y="704" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+创建行程／更新进度／串行重算()</text>
+<text x="549" y="733" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+先取数再决策；统一保存与发布()</text>
+<rect x="1090" y="610" width="445" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M1090,675H1535" stroke="#555555" stroke-width="1.1"/>
+<text x="1312.5" y="635" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«control»</text>
+<text x="1312.5" y="661" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">快照推送 SSEHub</text>
+<text x="1104" y="704" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+按行程订阅／广播完整快照()</text>
+<text x="1104" y="733" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+心跳维持连接()</text>
+<rect x="80" y="875" width="945" height="300" fill="#FFFFFF" stroke="#333333" stroke-width="1.6"/>
+<path d="M80,923H1025V875H80Z" fill="#F0F1F2" stroke="#333333" stroke-width="1.6"/>
+<text x="98" y="907" font-size="23" font-weight="bold" text-anchor="start" fill="#222222">领域逻辑层（先取数，再决策）</text>
+<rect x="105" y="935" width="430" height="210" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M105,1000H535" stroke="#555555" stroke-width="1.1"/>
+<text x="320.0" y="960" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«control»</text>
+<text x="320.0" y="986" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">数据感知 DataAgent</text>
+<text x="119" y="1029" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+核验观测／评估数据质量()</text>
+<text x="119" y="1058" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+生成 State 与 Issues()</text>
+<text x="119" y="1087" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+补全行程身份（按需）()</text>
+<text x="119" y="1116" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">单源失败不终止分析</text>
+<rect x="585" y="935" width="415" height="210" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M585,1000H1000" stroke="#555555" stroke-width="1.1"/>
+<text x="792.5" y="960" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«control»</text>
+<text x="792.5" y="986" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">行动决策 AdviceAgent</text>
+<text x="599" y="1029" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">+计算时间事实／判断阶段与风险()</text>
+<text x="599" y="1058" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">+生成指标、行动、提醒与依据()</text>
+<text x="599" y="1087" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">+校验输出／执行风险下限()</text>
+<text x="599" y="1116" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">+生成导航链接()</text>
+<rect x="80" y="1270" width="945" height="330" fill="#FFFFFF" stroke="#333333" stroke-width="1.6"/>
+<path d="M80,1318H1025V1270H80Z" fill="#F0F1F2" stroke="#333333" stroke-width="1.6"/>
+<text x="98" y="1302" font-size="23" font-weight="bold" text-anchor="start" fill="#222222">数据技能与模型适配层</text>
+<rect x="105" y="1330" width="430" height="235" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M105,1395H535" stroke="#555555" stroke-width="1.1"/>
+<text x="320.0" y="1355" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«control»</text>
+<text x="320.0" y="1381" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">数据技能服务 SkillRegistry</text>
+<text x="119" y="1424" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">+按缺失字段调度数据技能()</text>
+<text x="119" y="1453" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">航班状态／身份／机场概况：EOOB</text>
+<text x="119" y="1482" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">路程 ETA：本地估算</text>
+<text x="119" y="1511" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">（直线距离 × 1.3 ÷ 30 km/h）</text>
+<text x="119" y="1540" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">+单技能失败记录 Issues()</text>
+<rect x="585" y="1330" width="415" height="170" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M585,1395H1000" stroke="#555555" stroke-width="1.1"/>
+<text x="792.5" y="1355" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«interface»</text>
+<text x="792.5" y="1381" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">模型访问接口 ModelClient</text>
+<text x="599" y="1424" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+调用已配置模型生成 JSON()</text>
+<text x="599" y="1453" font-size="21" font-weight="normal" text-anchor="start" fill="#222222">+封装超时与并发限制()</text>
+<rect x="1075" y="875" width="485" height="725" fill="#FFFFFF" stroke="#333333" stroke-width="1.6"/>
+<path d="M1075,923H1560V875H1075Z" fill="#F0F1F2" stroke="#333333" stroke-width="1.6"/>
+<text x="1093" y="907" font-size="23" font-weight="bold" text-anchor="start" fill="#222222">数据层（进程内存储）</text>
+<rect x="1100" y="935" width="435" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M1100,1000H1535" stroke="#555555" stroke-width="1.1"/>
+<text x="1317.5" y="960" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«repository»</text>
+<text x="1317.5" y="986" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">内存存储 MemoryStore</text>
+<text x="1114" y="1029" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">+读写行程、快照与内部进度()</text>
+<text x="1114" y="1058" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">-Map 存储，随进程生命周期存在</text>
+<rect x="1100" y="1120" width="435" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M1100,1185H1535" stroke="#555555" stroke-width="1.1"/>
+<text x="1317.5" y="1145" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«entity»</text>
+<text x="1317.5" y="1171" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">位置进度 JourneyProgress</text>
+<text x="1114" y="1214" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">-当前位置／手动确认阶段</text>
+<text x="1114" y="1243" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">仅内部使用，不进入快照契约</text>
+<rect x="1100" y="1310" width="435" height="260" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M1100,1375H1535" stroke="#555555" stroke-width="1.1"/>
+<text x="1317.5" y="1335" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«entity»</text>
+<text x="1317.5" y="1361" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">行程快照 JourneySnapshot</text>
+<text x="1114" y="1404" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">-status / error</text>
+<text x="1114" y="1433" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">-journey : Journey（航段、行李）</text>
+<text x="1114" y="1462" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">-state : State（航班、时间轴、质量）</text>
+<text x="1114" y="1491" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">-advice : Advice（阶段、风险、提醒）</text>
+<text x="1114" y="1520" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">  cards[] / actions[] / reasons[]</text>
+<text x="1114" y="1549" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">  action.nav : Nav?（App / Web）</text>
+<rect x="50" y="1750" width="1540" height="230" fill="#FFFFFF" stroke="#333333" stroke-width="1.6"/>
+<path d="M50,1798H1590V1750H50Z" fill="#F0F1F2" stroke="#333333" stroke-width="1.6"/>
+<text x="68" y="1782" font-size="23" font-weight="bold" text-anchor="start" fill="#222222">外部系统</text>
+<rect x="105" y="1810" width="430" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M105,1875H535" stroke="#555555" stroke-width="1.1"/>
+<text x="320.0" y="1835" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«external»</text>
+<text x="320.0" y="1861" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">EOOB 航班与机场聚合源</text>
+<text x="119" y="1904" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">航班状态／身份补全</text>
+<text x="119" y="1933" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">机场概况／计划客流／延误档位</text>
+<rect x="585" y="1810" width="415" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M585,1875H1000" stroke="#555555" stroke-width="1.1"/>
+<text x="792.5" y="1835" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«external»</text>
+<text x="792.5" y="1861" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">已配置的大模型服务</text>
+<text x="599" y="1904" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">OpenAI 兼容端点</text>
+<text x="599" y="1933" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">生成建议 JSON</text>
+<rect x="1100" y="1810" width="435" height="140" fill="white" stroke="#555555" stroke-width="1.1"/>
+<path d="M1100,1875H1535" stroke="#555555" stroke-width="1.1"/>
+<text x="1317.5" y="1835" font-size="17" font-weight="normal" text-anchor="middle" fill="#222222">«external»</text>
+<text x="1317.5" y="1861" font-size="21" font-weight="bold" text-anchor="middle" fill="#222222">地图应用或导航网页</text>
+<text x="1114" y="1904" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">旅客点击后打开</text>
+<text x="1114" y="1933" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">App 优先，失败回退 Web</text>
+<path d="M287.5,350 L287.5,460 L65,460 L65,680 L105,680" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="306" y="421.5" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">HTTP / JSON</text>
+<text x="306" y="449.5" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">创建、上报、查询、订阅</text>
+<path d="M470,680 L535,680" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M1025,680 L1090,680" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M1312.5,610 L1312.5,425 L820,425 L820,320" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="1070.0" y="409.0" font-size="20" font-weight="normal" text-anchor="middle" fill="#222222">SSE：snapshot / heartbeat</text>
+<path d="M680,750 L680,820 L515,820 L515,935" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="336" y="862.0" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">① 生成状态</text>
+<path d="M792.5,750 L792.5,935" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="810" y="862.0" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">② 生成建议</text>
+<path d="M980,750 L980,820 L1475,820 L1475,925 L1317.5,925 L1317.5,935" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="1333" y="862.0" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">③ 读写／保存</text>
+<path d="M535,1040 L585,1040" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="560.0" y="1007.4000000000001" font-size="12" font-weight="normal" text-anchor="middle" fill="#222222">State</text>
+<text x="560.0" y="1024.2" font-size="12" font-weight="normal" text-anchor="middle" fill="#222222">Issues</text>
+<path d="M320,1145 L320,1250 L515,1250 L515,1330" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="336" y="1218.0" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">按缺失字段调用</text>
+<path d="M792.5,1145 L792.5,1330" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="810" y="1228.0" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">生成建议 JSON</text>
+<path d="M1317.5,1075 L1317.5,1120" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="1333" y="1102.2" font-size="18" font-weight="normal" text-anchor="start" fill="#222222">存取</text>
+<path d="M1100,1005 L1088,1005 L1088,1440 L1100,1440" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M320,1565 L320,1810" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="8 5"/>
+<text x="336" y="1708.0" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">普通 HTTPS</text>
+<path d="M792.5,1500 L792.5,1810" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="8 5"/>
+<text x="810" y="1708.0" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">OpenAI 兼容协议</text>
+<path d="M1560,250 L1615,250 L1615,1875 L1535,1875" fill="none" stroke="#333333" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="8 5"/>
+<text transform="translate(1592,1065) rotate(90)" text-anchor="middle" font-size="18" fill="#333333">用户点击导航：nav.app 优先，失败回退 nav.web</text>
+<text x="80" y="2033.0" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">执行约束：同行程串行重算；位置／阶段更新立即触发；快照保存后推送。</text>
+<text x="80" y="2068.0" font-size="20" font-weight="normal" text-anchor="start" fill="#222222">数据约束：未知值返回 null；关键数据缺失不判为 green；模型不可用时降级并说明原因。</text>
+<text x="80" y="2100.2000000000003" font-size="18" font-weight="normal" text-anchor="start" fill="#555555">实线表示内部调用或数据流，虚线表示外部访问／跳转。时间统一取服务端时钟。</text>
+</g></svg>

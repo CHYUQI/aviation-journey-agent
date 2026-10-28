@@ -1,0 +1,36 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+autonumber
+participant "Runtime" as R
+participant "data.Agent" as D
+participant "skill.Registry" as REG
+participant "skill.Skill" as SK
+participant "外部服务" as EXT
+R -> D : BuildState(ctx, data.Input)
+D -> D : domain.NewState()\nresolveJourneyIdentity(ctx, journey)
+D -> D : MissingFields(state)
+D -> REG : Query(ctx, skill.Query)
+loop 按缺失字段匹配 每个技能每次查询最多调用一次
+ REG -> SK : Supports(field)
+ REG -> SK : Execute(ctx, query)
+ SK -> EXT : 普通 HTTPS 请求\n需要定位的技能读取 query.Location
+ EXT --> SK : 数据或错误
+ SK --> REG : Observations + Issues
+end
+REG --> D : skill.Result
+D -> D : applyObservations(...)\nbuildTimeline(times)\nassessQuality(state, etaRequired(...))
+D --> R : data.Result{State, Journey, Issues}
+note over D,REG : 单源失败记入 Issues\n每轮从新 State 开始 不逐字段回填旧数据
+note over SK,EXT : flight_status / airport_status / flight_identity 为 EOOB\nroute_eta 当前调用高德 与仓库本地估算约束有偏差
+
+@enduml

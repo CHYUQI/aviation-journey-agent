@@ -1,0 +1,55 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+!pragma layout smetana
+top to bottom direction
+class "api.JourneyHandler" as H {
+ + Create(c)
+ + UpdateLocation(c)
+ + State(c)
+ + Stream(c)
+}
+class "runtime.Runtime" as R {
+ + CreateJourney(journey)
+ + ApplyLocation(id, req)
+ + Recalculate(ctx, id)
+ + GetSnapshot(id)
+ + Subscribe(id)
+ + StartPeriodicRefresh(ctx, interval, ids)
+}
+class "store.MemoryStore" as S {
+ + SaveJourney(journey)
+ + GetJourney(id)
+ + SaveSnapshot(snapshot)
+ + GetSnapshot(id)
+ + SaveProgress(id, progress)
+ + GetProgress(id)
+ + ListJourneyIDs()
+}
+class "runtime.SSEHub" as HUB {
+ + Subscribe(id)
+ + Publish(id, snapshot)
+}
+class "data.Agent" as D {
+ + BuildState(ctx, in)
+}
+class "advice.Agent" as A {
+ + Evaluate(ctx, in)
+}
+H --> R
+R --> S
+R --> HUB
+R --> D
+R --> A
+
+
+@enduml

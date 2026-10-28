@@ -1,0 +1,44 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+autonumber
+participant "useJourneyStore" as UI
+participant "JourneyHandler" as H
+participant "Runtime" as R
+participant "MemoryStore" as S
+participant "SSEHub" as HUB
+UI -> H : GET /api/v1/journey/{id}/state
+H -> R : GetSnapshot(id)
+R -> S : GetSnapshot(id)
+S --> R : snapshot 或 ErrNotFound
+R --> H : snapshot 或 error
+H --> UI : 200 + snapshot 或 404
+== 行程存在时建立 SSE ==
+UI -> H : GET /api/v1/journey/{id}/stream
+H -> R : Subscribe(id)
+R -> HUB : Subscribe(id)
+HUB --> R : updates, cancel
+R --> H : updates, cancel
+H -> R : GetSnapshot(id)
+R -> S : GetSnapshot(id)
+S --> R : 当前快照
+R --> H : 当前快照
+H --> UI : retry: 5000\nevent: snapshot
+loop 后续发布与心跳
+ HUB --> H : updates 通道中的完整快照
+ H --> UI : event: snapshot
+ H --> UI : 15秒 ticker 触发 heartbeat
+end
+note over H,HUB : Stream 结束时调用 cancel\nHub 只管理通道 不写 HTTP 也不发心跳
+note over UI : 断线超过20秒后启用15秒轮询\nGET /state 不触发重算
+
+@enduml

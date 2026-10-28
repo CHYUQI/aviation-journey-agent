@@ -1,0 +1,69 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 15
+skinparam dpi 200
+skinparam backgroundColor white
+skinparam monochrome true
+skinparam sequenceArrowColor #303030
+skinparam sequenceActorBorderColor #303030
+skinparam sequenceActorBackgroundColor white
+skinparam shadowing false
+skinparam roundcorner 0
+skinparam sequenceMessageAlign center
+skinparam sequenceArrowThickness 1.2
+skinparam sequenceParticipantBorderColor #303030
+skinparam sequenceParticipantBackgroundColor white
+skinparam sequenceLifeLineBorderColor #505050
+skinparam sequenceLifeLineBorderThickness 1.8
+skinparam sequenceLifeLineBackgroundColor white
+skinparam sequenceGroupBorderColor #666666
+skinparam sequenceGroupBackgroundColor #F4F4F4
+skinparam sequenceGroupHeaderFontColor #202020
+skinparam noteBackgroundColor #FAFAFA
+skinparam noteBorderColor #999999
+skinparam maxMessageSize 220
+hide footbox
+autonumber
+
+title 图2-6 清除本机行程记录用例顺序图
+
+actor "旅客" as Traveller
+boundary "行程页面\n<<boundary>>" as Page
+control "本机行程管理\n<<control>>" as LocalJourney
+entity "当前设备保存的行程信息\n<<entity>>" as LocalRecord
+
+Traveller -> Page : 选择清除本机行程记录
+activate Page
+Page -> LocalJourney : 请求清除本机记录
+activate LocalJourney
+
+alt 正在提交创建信息
+    LocalJourney --> Page : 暂不允许清除
+    Page --> Traveller : 等待提交结束后再操作
+else 可以清除记录
+    LocalJourney -> LocalRecord : 清除行程编号、创建时填写的信息及记录
+    activate LocalRecord
+    alt 清除成功
+        LocalRecord --> LocalJourney : 记录已清除
+    else 当前设备无法清除保存内容
+        LocalRecord --> LocalJourney : 保存内容未能清除
+        LocalJourney --> Page : 告知本机记录未清除的情况
+        Page --> Traveller : 说明再次打开时可能仍读到原记录
+    end
+    deactivate LocalRecord
+
+    LocalJourney -> LocalJourney : 停止原行程后续展示
+    LocalJourney -> LocalJourney : 清空当前内容和较早保留的结果
+    LocalJourney --> Page : 复位本次行程展示
+    Page -> Page : 清空填写内容及原行程提示
+    Page --> Traveller : 返回创建行程页面
+    deactivate Page
+end
+deactivate LocalJourney
+
+note over Page, LocalRecord
+正常清除后，再次进入不自动恢复该行程。
+本操作只影响当前设备保存的信息，
+不等同于删除系统中的全部行程。
+end note
+@enduml

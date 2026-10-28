@@ -1,0 +1,38 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+autonumber
+participant "StageConfirm.vue" as UI
+participant "JourneyHandler" as H
+participant "Runtime" as R
+participant "MemoryStore" as S
+participant "SSEHub" as HUB
+UI -> H : POST /api/v1/journey/{id}/location
+H -> H : UpdateLocation(c)\nreq.Validate()
+H -> R : ApplyLocation(id, req)
+R -> S : GetJourney(id) / GetProgress(id)
+S --> R : journey / progress
+alt 提供成对坐标
+ R -> R : 更新 progress.Location\n清除 progress.ManualStage
+end
+opt 同一请求含 stage
+ R -> R : 设置 progress.ManualStage
+end
+R -> S : SaveProgress(id, progress)
+R -> R : publishProcessing(journey)\nfinish(id, processingSnapshot)
+R -> S : SaveSnapshot(snapshot)
+R -> HUB : Publish(id, snapshot)
+R -> R : analyzeAsync(id)
+H --> UI : 202 + processing
+note over R,HUB : 完成后的快照也经 finish 保存并发布\n不等待周期调度 同行程重算串行合并
+
+@enduml

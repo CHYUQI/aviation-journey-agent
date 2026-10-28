@@ -1,0 +1,36 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+!pragma layout smetana
+left to right direction
+node "PC 或手机浏览器" as B {
+ artifact "Vue 3 + TypeScript\n静态构建产物" as UI
+}
+node "应用主机" as HOST {
+ artifact "cmd/server\n单个Go可执行程序" as BIN
+ rectangle "进程内对象\nRuntime / Agents\nMemoryStore / SSEHub" as MEM
+ BIN --> MEM
+}
+cloud "EOOB\n航班与机场" as E
+cloud "配置的模型端点" as M
+cloud "高德路径服务\n当前路程实现" as ROUTE
+UI --> BIN : HTTP / JSON\nSSE
+BIN --> E : HTTPS
+BIN --> M : HTTP(S) / JSON
+BIN --> ROUTE : HTTPS
+note bottom of HOST
+本地Vite:5173代理/api到:8080。
+Go服务使用router.Run 不自行终止TLS。
+公网HTTPS需由部署设施提供。
+end note
+
+@enduml

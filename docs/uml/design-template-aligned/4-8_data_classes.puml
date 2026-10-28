@@ -1,0 +1,75 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+!pragma layout smetana
+top to bottom direction
+class "domain.JourneySnapshot" as SNAP {
+ Status : string
+ Error : *string
+}
+class "domain.Journey" as J {
+ ID : string
+ HasBaggage : bool
+}
+class "domain.State" as S {
+ FlightStatus : string
+ Gate : *string
+ ETAMin : *int
+ Traffic : *string
+ Guide : []string
+ Quality : string
+ UpdatedAt : string
+}
+class "domain.Advice" as A {
+ Stage : string
+ Risk : string
+ Alert : *string
+ Reasons : []string
+}
+class "domain.Flight" as F {
+ Number : string
+ Date : string
+ From : string
+ To : string
+}
+class "domain.TimelineNode" as T {
+ Label : string
+ Time : string
+}
+class "domain.Card" as C {
+ Label : string
+ Value : string
+}
+class "domain.Action" as AC {
+ ID : string
+ Title : string
+ Detail : string
+}
+class "domain.Nav" as N {
+ App : string
+ Web : string
+}
+SNAP *-- "1" J : Journey
+SNAP *-- "1" S : State
+SNAP *-- "1" A : Advice
+J *-- "1..*" F : Flights
+S *-- "0..*" T : Timeline
+A *-- "0..*" C : Cards
+A *-- "0..*" AC : Actions
+AC *-- "0..1" N : Nav
+J -[hidden]right- S
+S -[hidden]right- A
+F -[hidden]right- T
+T -[hidden]right- C
+C -[hidden]right- AC
+
+@enduml

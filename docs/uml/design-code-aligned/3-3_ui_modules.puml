@@ -1,0 +1,50 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+!pragma layout smetana
+top to bottom direction
+class "Dashboard.vue" as V <<Vue component>> {
+ submit()
+ retry()
+ restoreJourney()
+ removeJourney()
+}
+class "stores/journey.ts" as J <<module>> {
+ load(id)
+ reset()
+}
+class "stores/location.ts" as L <<module>> {
+ locate(journeyId)
+ confirmStage(journeyId, stage)
+}
+class "api/journey.ts" as API <<module>> {
+ createJourney(payload)
+ getState(id)
+ updateLocation(id, payload)
+ createStream(id, onSnapshot)
+}
+class "StageConfirm.vue" as ST <<Vue component>> {
+ pick(stage)
+ reportLocation()
+}
+class "NavigateButton.vue" as NAV <<Vue component>> {
+ open()
+}
+V --> J
+V --> API
+V --> ST : 渲染
+V --> NAV : 经 ActionCardList 渲染
+ST --> L
+L --> API
+J --> API
+
+@enduml

@@ -1,0 +1,38 @@
+@startuml
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam padding 8
+skinparam dpi 180
+hide footbox
+autonumber
+participant "Runtime" as R
+participant "advice.Agent" as A
+participant "advice 包内辅助函数\n与 modelAdvice 方法" as F
+participant "model.Client" as M
+R -> R : decide(...)\nsameAdviceInputs(prev, inputs)
+alt 上一快照 ready 且输入相同
+ R -> F : WithAirportTimeSimulation(previous.Advice, input)
+ F --> R : 复用的 Advice
+else 生成新建议
+ R -> A : Evaluate(ctx, advice.Input)
+ A -> A : evaluate(ctx, in)
+ A -> F : userPrompt(in)\nComputeTimeFacts(state, progress, etaMin, now)
+ A -> M : 经 model.GenerateJSON 调用 Chat(ctx, req)
+ M --> A : 模型 JSON 或错误
+ A -> F : modelAdvice.valid() / toDomain(nav)\nBuildAirportNav(iata, origin)
+ A -> A : 手动阶段覆盖 result.Stage
+ A -> F : enforceRiskFloor(result, in)
+ A -> F : ensureAirportNav(result, in)
+ A -> F : WithAirportTimeSimulation(result, in)
+ A --> R : domain.Advice
+end
+note over A,M : 模型缺失或失败时 evaluate 返回降级 Advice\n其后仍执行阶段覆盖 风险兜底和工具导航补充
+note over R : decide 还可有条件保留上一版建议内容\n完整签名和分支条件见正文
+
+@enduml

@@ -1,0 +1,45 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 230
+skinparam padding 2
+skinparam dpi 160
+hide footbox
+top to bottom direction
+package "用户界面层  浏览器 SPA" {
+ component "Dashboard.vue\nStageConfirm / NavigateButton\nuseJourneyStore / useLocation" as UI
+}
+package "HTTP 边界层  Go 单进程" {
+ component "api.JourneyHandler\nCreate / State / Stream / UpdateLocation" as H
+}
+package "业务逻辑层  Go 单进程" {
+ component "runtime.Runtime\n行程编排与快照生命周期" as R
+ component "data.Agent\nBuildState" as D
+ component "advice.Agent\nEvaluate" as A
+ component "runtime.SSEHub\n全量快照订阅与发布" as HUB
+}
+package "数据访问与外部接口层  Go 单进程" {
+ component "store.MemoryStore\njourneys / snapshots / progress\n进程内映射 非数据库" as ST
+ component "skill.Registry + skill.Skill\n航班 / 机场 / 路程数据适配" as SK
+ component "model.Client\n模型服务接口" as MODEL
+}
+cloud "EOOB\n当前路程实现另访问高德" as EXT
+cloud "配置的模型端点" as LLM
+UI --> H : HTTP / SSE
+H --> R
+R --> D
+R --> A
+R --> ST
+R --> HUB
+D --> SK
+A --> MODEL
+SK --> EXT : HTTPS
+MODEL --> LLM : HTTPS / JSON
+
+@enduml
