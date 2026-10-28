@@ -5,7 +5,7 @@ backend/*.test
 
 # Node
 frontend/node_modules/
-frontend/dist/
+# frontend/dist/
 frontend/.vite/
 
 # IDE / OS
