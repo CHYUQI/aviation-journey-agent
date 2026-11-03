@@ -395,15 +395,23 @@ button { font: inherit; }
 .journey-form form { display: grid; gap: 20px; }
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 .form-grid label {
   display: grid;
+  align-content: start;
   gap: 7px;
   font-size: 13px;
   color: var(--text-2);
   font-weight: 500;
+}
+@media (min-width: 1000px) {
+  .form-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
 }
 .form-grid input, .journey-form input[type='text'] {
   border: 1px solid #d9dde3;

@@ -3,6 +3,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useJourneyStore } from '../stores/journey'
 import { clearSavedJourney, loadSavedJourney, saveJourney } from '../stores/persistedJourney'
 import { createJourney } from '../api/journey'
+import { airportCode } from '../airportOptions'
+import AirportInput from '../components/AirportInput.vue'
 import type { CreateJourneyRequest } from '../types'
 import StatusBar from '../components/StatusBar.vue'
 import MetricsRow from '../components/MetricsRow.vue'
@@ -39,8 +41,8 @@ function buildPayload(): CreateJourneyRequest {
     flights: [{
       number: f.number.trim().toUpperCase(),
       date: f.date,
-      from: f.from.trim().toUpperCase(),
-      to: f.to.trim().toUpperCase(),
+      from: airportCode(f.from),
+      to: airportCode(f.to),
     }],
     hasBaggage: form.value.hasBaggage,
   }
@@ -52,8 +54,8 @@ function validate() {
     formError.value = '请填写完整航班信息'
     return false
   }
-  if (!/^[A-Z]{3}$/.test(f.from.trim().toUpperCase()) || !/^[A-Z]{3}$/.test(f.to.trim().toUpperCase())) {
-    formError.value = '机场代码需为 3 位大写字母（如 PVG）'
+  if (!airportCode(f.from) || !airportCode(f.to)) {
+    formError.value = '未识别机场名称，请选择下拉候选或输入 3 位 IATA 代码（如 PVG）'
     return false
   }
   formError.value = null
@@ -187,9 +189,10 @@ onUnmounted(() => store.stop())
             <div class="form-grid">
               <label>航班号<input v-model.trim="form.flights[0].number" placeholder="CA1234" maxlength="8" /></label>
               <label>日期<input v-model="form.flights[0].date" type="date" /></label>
-              <label>出发机场<input v-model.trim="form.flights[0].from" placeholder="PVG" maxlength="3" /></label>
-              <label>到达机场<input v-model.trim="form.flights[0].to" placeholder="PEK" maxlength="3" /></label>
+              <AirportInput id="departure-airport" v-model="form.flights[0].from" label="出发机场" />
+              <AirportInput id="arrival-airport" v-model="form.flights[0].to" label="到达机场" />
             </div>
+            <small class="muted">支持常用中英文地名，未收录机场可输入 IATA。多机场采用固定默认值，未按航班号核验；可修改机场。</small>
             <label class="baggage-check"><input v-model="form.hasBaggage" type="checkbox" /> 携带托运行李</label>
             <p v-if="formError" class="form-error">{{ formError }}</p>
             <button class="primary" type="submit" :disabled="creating">

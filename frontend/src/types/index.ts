@@ -53,7 +53,7 @@ export const StageLabel: Record<Stage, string> = {
 }
 
 export const RiskLabel: Record<Risk, string> = {
-  unknown: '未知',
+  unknown: '暂无',
   green: '低风险',
   yellow: '需关注',
   orange: '较高风险',

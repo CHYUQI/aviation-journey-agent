@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1090" height="876" viewBox="0 0 1090 876">
+<defs><marker id="call" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="black"/></marker>
+<marker id="return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="black" stroke-width="1.2"/></marker></defs>
+<rect width="1090" height="876" fill="white"/>
+<g fill="none" stroke="black" stroke-width="1.2">
+<path d="M155 57 V856" stroke-dasharray="7 5"/>
+<path d="M415 57 V856" stroke-dasharray="7 5"/>
+<path d="M675 57 V856" stroke-dasharray="7 5"/>
+<path d="M935 57 V856" stroke-dasharray="7 5"/>
+</g>
+<rect x="410" y="138" width="10" height="23" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="410" y="198" width="10" height="370" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="670" y="299" width="10" height="75" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="930" y="465" width="10" height="23" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="670" y="548" width="10" height="23" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="670" y="650" width="10" height="23" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="670" y="775" width="10" height="30" fill="white" stroke="black" stroke-width="1.1"/>
+<path d="M160 140 H409" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="181.0" y="84" width="208.0" height="47" fill="white"/>
+<text x="185.0" y="103" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">[action.nav != null]</text>
+<text x="185.0" y="126" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">nav = action.nav</text>
+<path d="M420 200 H453 V222 H422" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="465" y="167" width="68.0" height="24" fill="white"/>
+<text x="469" y="186" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">open()</text>
+<path d="M420 301 H669" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="441.0" y="245" width="208.0" height="47" fill="white"/>
+<text x="445.0" y="264" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">setTimeout(callback,</text>
+<text x="445.0" y="287" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">1200)</text>
+<path d="M670 361 H421" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="516.0" y="328" width="58.0" height="24" fill="white"/>
+<text x="520.0" y="347" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">timer</text>
+<path d="M420 467 H929" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="491.0" y="388" width="368.0" height="70" fill="white"/>
+<text x="495.0" y="407" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">addEventListener(&#x27;visibilitychange&#x27;,</text>
+<text x="495.0" y="430" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">() =&gt; window.clearTimeout(timer),</text>
+<text x="495.0" y="453" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">{ once: true })</text>
+<path d="M420 550 H669" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="466.0" y="494" width="158.0" height="47" fill="white"/>
+<text x="470.0" y="513" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">location.href =</text>
+<text x="470.0" y="536" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">props.nav.app</text>
+<rect x="305" y="578" width="740" height="249" fill="none" stroke="black" stroke-width="1"/>
+<text x="314" y="603" font-family="Microsoft YaHei" font-size="17" text-anchor="start" fill="black">alt [定时器触发前发生 visibilitychange]</text>
+<path d="M930 652 H681" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="706.0" y="619" width="198.0" height="24" fill="white"/>
+<text x="710.0" y="638" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">clearTimeout(timer)</text>
+<path d="M305 680 H1045" fill="none" stroke="black" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="314" y="705" font-family="Microsoft YaHei" font-size="17" text-anchor="start" fill="black">else [1200 ms 后定时器仍有效]</text>
+<path d="M680 777 H713 V799 H682" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="725" y="721" width="158.0" height="47" fill="white"/>
+<text x="729" y="740" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">location.href =</text>
+<text x="729" y="763" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">props.nav.web</text>
+<text x="155" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">ActionCardList.vue</text>
+<text x="415" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">NavigateButton.vue</text>
+<text x="675" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">window</text>
+<text x="935" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">document</text>
+</svg>

@@ -189,6 +189,12 @@ func TestWithAirportTimeSimulation_SkipsDegradedAndFinishedAdvice(t *testing.T) 
 	for _, status := range []string{domain.FlightStatusDeparted, domain.FlightStatusCancelled} {
 		state.FlightStatus = status
 		got := WithAirportTimeSimulation(base, Input{State: state})
+		if status == domain.FlightStatusDeparted {
+			if got.Risk != domain.RiskUnknown || got.Stage != domain.StageDeparted || len(got.Actions) != 0 {
+				t.Fatalf("已起飞时应清除起飞前建议：%+v", got)
+			}
+			continue
+		}
 		if !reflect.DeepEqual(got, base) {
 			t.Fatalf("航班 %s 时不应提示机场流程：%+v", status, got)
 		}

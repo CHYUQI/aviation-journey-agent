@@ -40,6 +40,10 @@ func NewAgent(client model.Client) *Agent { return &Agent{client: client} }
 
 // Evaluate 生成行动建议。
 func (a *Agent) Evaluate(ctx context.Context, in Input) domain.Advice {
+	if result, ok := postDepartureAdvice(in); ok {
+		return result
+	}
+
 	result := a.evaluate(ctx, in)
 
 	// 旅客手动确认的阶段是事实，优先于模型判断
@@ -51,8 +55,8 @@ func (a *Agent) Evaluate(ctx context.Context, in Input) domain.Advice {
 	// 最后一道防线：数据不足时不允许给出"安全"结论
 	enforceRiskFloor(&result, in)
 
-  ensureAirportNav(&result, in)
-  return WithAirportTimeSimulation(result, in)
+	ensureAirportNav(&result, in)
+	return WithAirportTimeSimulation(result, in)
 }
 
 func (a *Agent) evaluate(ctx context.Context, in Input) domain.Advice {
@@ -95,4 +99,22 @@ func (a *Agent) degraded(in Input, reason string) domain.Advice {
 	result.Reasons = append(result.Reasons, in.Issues...)
 	result.Reasons = append(result.Reasons, reason)
 	return result
+}
+
+// postDepartureAdvice 同时用于首次评估与刷新复用，防止旧建议恢复。
+func postDepartureAdvice(in Input) (domain.Advice, bool) {
+	// departed 包含飞行中、已落地和已到达；备降也已离开起飞前规划阶段。
+	// 直接返回，避免模型、手动阶段或风险兜底重新生成起飞前风险与行动。
+	if in.State.FlightStatus == domain.FlightStatusDeparted || in.State.FlightStatus == domain.FlightStatusDiverted {
+		result := domain.NewAdvice()
+		result.Stage = domain.StageDeparted
+		if in.State.FlightStatus == domain.FlightStatusDiverted {
+			result.Stage = domain.StageDisrupted
+		}
+		result.Reasons = append(result.Reasons, in.Issues...)
+		result.Reasons = append(result.Reasons, "航班已起飞，起飞前风险评估不再适用，请查看航班状态")
+		return result, true
+	}
+
+	return domain.Advice{}, false
 }

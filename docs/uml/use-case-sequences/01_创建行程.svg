@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1870" height="1146" viewBox="0 0 1870 1146">
+<defs><marker id="call" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="black"/></marker>
+<marker id="return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="black" stroke-width="1.2"/></marker></defs>
+<rect width="1870" height="1146" fill="white"/>
+<g fill="none" stroke="black" stroke-width="1.2">
+<path d="M155 57 V1126" stroke-dasharray="7 5"/>
+<path d="M415 57 V1126" stroke-dasharray="7 5"/>
+<path d="M675 57 V1126" stroke-dasharray="7 5"/>
+<path d="M935 57 V1126" stroke-dasharray="7 5"/>
+<path d="M1195 57 V1126" stroke-dasharray="7 5"/>
+<path d="M1455 57 V1126" stroke-dasharray="7 5"/>
+<path d="M1715 57 V1126" stroke-dasharray="7 5"/>
+</g>
+<rect x="150" y="115" width="10" height="996" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="157" y="193" width="10" height="30" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="157" y="271" width="10" height="30" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="410" y="349" width="10" height="637" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="670" y="409" width="10" height="517" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="930" y="469" width="10" height="397" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="1190" y="529" width="10" height="23" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="1190" y="635" width="10" height="23" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="937" y="695" width="10" height="30" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="937" y="773" width="10" height="30" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="1450" y="1031" width="10" height="23" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="1710" y="1091" width="10" height="23" fill="white" stroke="black" stroke-width="1.1"/>
+<path d="M160 117 H193 V139 H162" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="205" y="84" width="88.0" height="24" fill="white"/>
+<text x="209" y="103" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">submit()</text>
+<path d="M160 195 H193 V217 H162" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="205" y="162" width="108.0" height="24" fill="white"/>
+<text x="209" y="181" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">validate()</text>
+<path d="M160 273 H193 V295 H162" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="205" y="240" width="148.0" height="24" fill="white"/>
+<text x="209" y="259" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">buildPayload()</text>
+<path d="M160 351 H409" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="171.0" y="318" width="228.0" height="24" fill="white"/>
+<text x="175.0" y="337" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">createJourney(payload)</text>
+<path d="M420 411 H669" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="496.0" y="378" width="98.0" height="24" fill="white"/>
+<text x="500.0" y="397" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">Create(c)</text>
+<path d="M680 471 H929" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="691.0" y="438" width="228.0" height="24" fill="white"/>
+<text x="695.0" y="457" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">CreateJourney(journey)</text>
+<path d="M940 531 H1189" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="961.0" y="498" width="208.0" height="24" fill="white"/>
+<text x="965.0" y="517" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">SaveJourney(journey)</text>
+<path d="M940 637 H1189" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="936.0" y="558" width="258.0" height="70" fill="white"/>
+<text x="940.0" y="577" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">SaveProgress(journey.ID,</text>
+<text x="940.0" y="600" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">domain.JourneyProgress{})</text>
+<text x="940.0" y="623" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black"></text>
+<path d="M940 697 H973 V719 H942" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="985" y="664" width="268.0" height="24" fill="white"/>
+<text x="989" y="683" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">publishProcessing(journey)</text>
+<path d="M940 775 H973 V797 H942" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="985" y="742" width="248.0" height="24" fill="white"/>
+<text x="989" y="761" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">analyzeAsync(journey.ID)</text>
+<path d="M930 853 H681" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="786.0" y="820" width="38.0" height="24" fill="white"/>
+<text x="790.0" y="839" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">nil</text>
+<path d="M670 913 H421" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="446.0" y="880" width="198.0" height="24" fill="white"/>
+<text x="450.0" y="899" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">{journeyId, status}</text>
+<path d="M410 973 H161" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="241.0" y="940" width="88.0" height="24" fill="white"/>
+<text x="245.0" y="959" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">accepted</text>
+<path d="M160 1033 H1449" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="601.0" y="1000" width="408.0" height="24" fill="white"/>
+<text x="605.0" y="1019" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">saveJourney(accepted.journeyId, payload)</text>
+<path d="M160 1093 H1709" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="811.0" y="1060" width="248.0" height="24" fill="white"/>
+<text x="815.0" y="1079" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">load(accepted.journeyId)</text>
+<text x="155" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">Dashboard.vue</text>
+<text x="415" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">journey.ts</text>
+<text x="675" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">JourneyHandler</text>
+<text x="935" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">Runtime</text>
+<text x="1195" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">MemoryStore</text>
+<text x="1455" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">persistedJourney.ts</text>
+<text x="1715" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">useJourneyStore</text>
+</svg>

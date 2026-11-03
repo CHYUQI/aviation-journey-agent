@@ -66,6 +66,9 @@ func simulateAirportTimes(guide []string, hasBaggage bool) (airportTimeSimulatio
 // 刷新复用旧建议时也调用它，防止继续显示旧客流或已完成阶段的模拟。
 // 复制切片并先清除上次模拟，避免修改缓存快照或重复追加文案。
 func WithAirportTimeSimulation(result domain.Advice, in Input) domain.Advice {
+	if departed, ok := postDepartureAdvice(in); ok {
+		return departed
+	}
 	result.Actions = append([]domain.Action{}, result.Actions...)
 	for i := range result.Actions {
 		result.Actions[i].Detail, _, _ = strings.Cut(result.Actions[i].Detail, airportSimulationMarker)

@@ -213,11 +213,11 @@ func (s *FlightStatusSkill) fetchEOOBStatusAPI(ctx context.Context, flight domai
 	observedAt := time.Now().Format(time.RFC3339)
 	observations := make([]Observation, 0, 3)
 
-	statusCode := payload.Schedule.Status
+	remarksCode := ""
 	if payload.FIDS.Departure != nil && payload.FIDS.Departure.Matched && payload.FIDS.Departure.RemarksCode != "" {
-		statusCode = payload.FIDS.Departure.RemarksCode
+		remarksCode = payload.FIDS.Departure.RemarksCode
 	}
-	if status := mapEOOBStatusCode(statusCode); status != domain.FlightStatusUnknown {
+	if status := resolveEOOBStatus(payload.Schedule.Status, remarksCode); status != domain.FlightStatusUnknown {
 		observations = append(observations, Observation{
 			Field: FieldFlightStatus, Value: status,
 			Source: "EOOB 航班状态接口", ObservedAt: observedAt, Confidence: "high",
@@ -285,6 +285,24 @@ func (s *FlightStatusSkill) fetchEOOBStatusAPI(ctx context.Context, flight domai
 		return Result{}, false
 	}
 	return Result{Observations: observations, Issues: timezoneIssues}, true
+}
+
+// resolveEOOBStatus 防止航显中的起飞前状态覆盖接口已经报告的起飞后状态。
+func resolveEOOBStatus(scheduleCode, remarksCode string) string {
+	schedule := mapEOOBStatusCode(scheduleCode)
+	remarks := mapEOOBStatusCode(remarksCode)
+	switch remarks {
+	case domain.FlightStatusDeparted, domain.FlightStatusDiverted, domain.FlightStatusCancelled:
+		return remarks
+	}
+	switch schedule {
+	case domain.FlightStatusDeparted, domain.FlightStatusDiverted, domain.FlightStatusCancelled:
+		return schedule
+	}
+	if remarks != domain.FlightStatusUnknown {
+		return remarks
+	}
+	return schedule
 }
 
 func mapEOOBStatusCode(code string) string {

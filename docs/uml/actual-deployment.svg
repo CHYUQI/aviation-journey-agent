@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="740" viewBox="0 0 1320 740" role="img" aria-labelledby="title description" xml:lang="zh-CN">
+  <title id="title">系统实际部署图</title>
+  <desc id="description">旅客通过 Web 浏览器以 HTTPS 访问阿里云 ECS 公网 IP 8.136.197.232。ECS 运行 CentOS Linux 7，Nginx 提供前端 Vue 3 与 TypeScript 的 dist 静态资源，并将 API 与 SSE 请求通过 HTTP 转发至监听 127.0.0.1:8080 的单个 Go 后端程序 aviation-server。实线表示通信链路，虚线表示运行环境依赖。</desc>
+  <defs>
+    <style>
+      text { fill: #171717; font-family: "Microsoft YaHei", "Noto Sans CJK SC", "PingFang SC", sans-serif; text-anchor: middle; }
+      .title { font-size: 26px; font-weight: 600; }
+      .node-title { font-size: 22px; font-weight: 600; }
+      .stereo { font-family: "Times New Roman", serif; font-size: 17px; }
+      .body { font-size: 18px; }
+      .small { font-size: 15px; }
+      .path { font-family: Consolas, "Courier New", monospace; font-size: 13px; }
+      .binary { font-family: Consolas, "Courier New", monospace; font-size: 18px; }
+      .outline { fill: #fff; stroke: #222; stroke-width: 1.7; stroke-linejoin: round; }
+      .side { fill: #eee; stroke: #222; stroke-width: 1.7; stroke-linejoin: round; }
+      .environment { fill: #fafafa; stroke: #222; stroke-width: 1.6; }
+      .link { fill: none; stroke: #222; stroke-width: 1.7; stroke-linecap: square; stroke-linejoin: round; }
+      .dependency { fill: none; stroke: #444; stroke-width: 1.5; stroke-dasharray: 7 5; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#222" stroke-width="1.6"/>
+    </marker>
+    <marker id="dependency-arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#444" stroke-width="1.5"/>
+    </marker>
+  </defs>
+
+  <rect width="1320" height="740" fill="#fff"/>
+  <text class="title" x="660" y="49">系统部署图</text>
+
+  <!-- UML device: client -->
+  <g id="client-device">
+    <path class="side" d="M 40 240 L 52 228 L 332 228 L 320 240 Z"/>
+    <path class="side" d="M 320 240 L 332 228 L 332 528 L 320 540 Z"/>
+    <rect class="outline" x="40" y="240" width="280" height="300"/>
+    <text class="stereo" x="180" y="273">«device»</text>
+    <text class="node-title" x="180" y="307">旅客终端</text>
+
+    <g id="browser">
+      <rect class="environment" x="65" y="335" width="230" height="140"/>
+      <text class="stereo" x="180" y="363">«executionEnvironment»</text>
+      <text class="node-title" x="180" y="399">Web 浏览器</text>
+      <text class="small" x="180" y="435">页面渲染与用户交互</text>
+    </g>
+  </g>
+
+  <!-- UML device: the single ECS server hosting both frontend and backend -->
+  <g id="ecs-device">
+    <path class="side" d="M 610 105 L 622 93 L 1272 93 L 1260 105 Z"/>
+    <path class="side" d="M 1260 105 L 1272 93 L 1272 658 L 1260 670 Z"/>
+    <rect class="outline" x="610" y="105" width="650" height="565"/>
+    <text class="stereo" x="935" y="135">«device»</text>
+    <text class="node-title" x="935" y="165">阿里云 ECS 云服务器</text>
+    <text class="small" x="935" y="191">公网 IP：8.136.197.232</text>
+
+    <g id="nginx-environment">
+      <rect class="environment" x="650" y="295" width="270" height="240"/>
+      <text class="stereo" x="785" y="322">«executionEnvironment»</text>
+      <text class="node-title" x="785" y="353">Nginx</text>
+      <text class="small" x="785" y="379">HTTPS 入口 · 静态资源托管</text>
+
+      <g id="frontend-artifact">
+        <path class="outline" d="M 675 399 H 877 L 895 417 V 511 H 675 Z"/>
+        <path class="link" d="M 877 399 V 417 H 895"/>
+        <text class="stereo" x="785" y="425">«artifact»</text>
+        <text class="body" x="785" y="451">前端 dist 静态资源</text>
+        <text class="small" x="785" y="475">Vue 3 + TypeScript</text>
+        <text class="path" x="785" y="496">/var/www/aviation-journey</text>
+      </g>
+    </g>
+
+    <g id="backend-artifact">
+      <path class="outline" d="M 980 335 H 1207 L 1225 353 V 535 H 980 Z"/>
+      <path class="link" d="M 1207 335 V 353 H 1225"/>
+      <text class="stereo" x="1102.5" y="363">«artifact»</text>
+      <text class="node-title" x="1102.5" y="395">Go 后端程序</text>
+      <text class="binary" x="1102.5" y="426">aviation-server</text>
+      <text class="small" x="1102.5" y="459">API · DataAgent · AdviceAgent</text>
+      <text class="small" x="1102.5" y="485">SSE · 进程内存储</text>
+      <text class="small" x="1102.5" y="514">单个 Go 服务进程</text>
+    </g>
+
+    <g id="server-os">
+      <rect class="environment" x="650" y="590" width="575" height="55"/>
+      <text class="stereo" x="937.5" y="610">«OS»</text>
+      <text class="body" x="937.5" y="634">CentOS Linux 7</text>
+    </g>
+  </g>
+
+  <!-- Browser-to-server communication: HTTPS carries assets, API and SSE -->
+  <path class="link" d="M 295 399 H 650" marker-end="url(#arrow)"/>
+  <text class="body" x="472" y="364">HTTPS / TCP 443</text>
+  <text class="small" x="472" y="428">页面资源 · API · SSE</text>
+
+  <!-- The reverse proxy communicates with the Go process over loopback -->
+  <path class="link" d="M 920 330 H 940 V 260 H 1102.5 V 335" marker-end="url(#arrow)"/>
+  <text class="body" x="1060" y="224">HTTP / 127.0.0.1:8080</text>
+  <text class="small" x="1060" y="246">/api/v1/ · JSON / SSE</text>
+
+  <!-- Execution dependencies, not extra network links -->
+  <path class="dependency" d="M 785 535 V 590" marker-end="url(#dependency-arrow)"/>
+  <path class="dependency" d="M 1102.5 535 V 590" marker-end="url(#dependency-arrow)"/>
+  <text class="small" x="820" y="569">运行于</text>
+  <text class="small" x="1138" y="569">运行于</text>
+
+  <text class="small" x="660" y="713">实线：通信链路　　虚线：运行环境依赖</text>
+</svg>

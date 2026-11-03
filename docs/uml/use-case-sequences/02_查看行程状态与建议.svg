@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1610" height="1572" viewBox="0 0 1610 1572">
+<defs><marker id="call" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="black"/></marker>
+<marker id="return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="black" stroke-width="1.2"/></marker></defs>
+<rect width="1610" height="1572" fill="white"/>
+<g fill="none" stroke="black" stroke-width="1.2">
+<path d="M155 57 V1552" stroke-dasharray="7 5"/>
+<path d="M415 57 V1552" stroke-dasharray="7 5"/>
+<path d="M675 57 V1552" stroke-dasharray="7 5"/>
+<path d="M935 57 V1552" stroke-dasharray="7 5"/>
+<path d="M1195 57 V1552" stroke-dasharray="7 5"/>
+<path d="M1455 57 V1552" stroke-dasharray="7 5"/>
+</g>
+<rect x="150" y="115" width="10" height="661" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="410" y="193" width="10" height="458" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="670" y="253" width="10" height="338" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="930" y="336" width="10" height="195" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="1190" y="396" width="10" height="75" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="410" y="696" width="10" height="75" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="670" y="816" width="10" height="721" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="930" y="876" width="10" height="195" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="1450" y="936" width="10" height="75" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="930" y="1116" width="10" height="195" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="1190" y="1176" width="10" height="75" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="150" y="1439" width="10" height="98" fill="white" stroke="black" stroke-width="1.1"/>
+<rect x="157" y="1499" width="10" height="30" fill="white" stroke="black" stroke-width="1.1"/>
+<path d="M160 117 H193 V139 H162" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="205" y="84" width="88.0" height="24" fill="white"/>
+<text x="209" y="103" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">load(id)</text>
+<path d="M160 195 H409" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="221.0" y="162" width="128.0" height="24" fill="white"/>
+<text x="225.0" y="181" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">getState(id)</text>
+<path d="M420 255 H669" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="501.0" y="222" width="88.0" height="24" fill="white"/>
+<text x="505.0" y="241" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">State(c)</text>
+<path d="M680 338 H929" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="731.0" y="282" width="148.0" height="47" fill="white"/>
+<text x="735.0" y="301" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">GetSnapshot(</text>
+<text x="735.0" y="324" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">c.Param(&quot;id&quot;))</text>
+<path d="M940 398 H1189" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="986.0" y="365" width="158.0" height="24" fill="white"/>
+<text x="990.0" y="384" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">GetSnapshot(id)</text>
+<path d="M1190 458 H941" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="996.0" y="425" width="138.0" height="24" fill="white"/>
+<text x="1000.0" y="444" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">snapshot, nil</text>
+<path d="M930 518 H681" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="736.0" y="485" width="138.0" height="24" fill="white"/>
+<text x="740.0" y="504" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">snapshot, nil</text>
+<path d="M670 578 H421" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="501.0" y="545" width="88.0" height="24" fill="white"/>
+<text x="505.0" y="564" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">snapshot</text>
+<path d="M410 638 H161" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="261.0" y="605" width="48.0" height="24" fill="white"/>
+<text x="265.0" y="624" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">next</text>
+<path d="M160 698 H409" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="166.0" y="665" width="238.0" height="24" fill="white"/>
+<text x="170.0" y="684" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">createStream(id, apply)</text>
+<path d="M410 758 H161" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="251.0" y="725" width="68.0" height="24" fill="white"/>
+<text x="255.0" y="744" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">source</text>
+<path d="M420 818 H669" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#return)"/>
+<rect x="496.0" y="785" width="98.0" height="24" fill="white"/>
+<text x="500.0" y="804" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">Stream(c)</text>
+<path d="M680 878 H929" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="736.0" y="845" width="138.0" height="24" fill="white"/>
+<text x="740.0" y="864" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">Subscribe(id)</text>
+<path d="M940 938 H1449" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="1126.0" y="905" width="138.0" height="24" fill="white"/>
+<text x="1130.0" y="924" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">Subscribe(id)</text>
+<path d="M1450 998 H941" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="1141.0" y="965" width="108.0" height="24" fill="white"/>
+<text x="1145.0" y="984" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">ch, cancel</text>
+<path d="M930 1058 H681" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="701.0" y="1025" width="208.0" height="24" fill="white"/>
+<text x="705.0" y="1044" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">updates, unsubscribe</text>
+<path d="M680 1118 H929" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="726.0" y="1085" width="158.0" height="24" fill="white"/>
+<text x="730.0" y="1104" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">GetSnapshot(id)</text>
+<path d="M940 1178 H1189" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="986.0" y="1145" width="158.0" height="24" fill="white"/>
+<text x="990.0" y="1164" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">GetSnapshot(id)</text>
+<path d="M1190 1238 H941" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="996.0" y="1205" width="138.0" height="24" fill="white"/>
+<text x="1000.0" y="1224" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">snapshot, nil</text>
+<path d="M930 1298 H681" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="736.0" y="1265" width="138.0" height="24" fill="white"/>
+<text x="740.0" y="1284" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">snapshot, nil</text>
+<path d="M670 1358 H421" fill="none" stroke="black" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#return)"/>
+<rect x="501.0" y="1325" width="88.0" height="24" fill="white"/>
+<text x="505.0" y="1344" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">snapshot</text>
+<path d="M410 1441 H161" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="181.0" y="1385" width="208.0" height="47" fill="white"/>
+<text x="185.0" y="1404" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">onSnapshot(snapshot)</text>
+<text x="185.0" y="1427" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">= apply(snapshot)</text>
+<path d="M160 1501 H193 V1523 H162" fill="none" stroke="black" stroke-width="1.3" marker-end="url(#call)"/>
+<rect x="205" y="1468" width="158.0" height="24" fill="white"/>
+<text x="209" y="1487" font-family="Consolas, Microsoft YaHei" font-size="18" text-anchor="start" fill="black">clearFallback()</text>
+<text x="155" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">useJourneyStore</text>
+<text x="415" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">journey.ts</text>
+<text x="675" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">JourneyHandler</text>
+<text x="935" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">Runtime</text>
+<text x="1195" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">MemoryStore</text>
+<text x="1455" y="34" font-family="Times New Roman" font-size="21" text-anchor="middle" text-decoration="underline" fill="black">SSEHub</text>
+</svg>
