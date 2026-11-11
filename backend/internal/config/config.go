@@ -18,10 +18,11 @@ const EnvFileEnvVar = "AJA_ENV_FILE"
 
 // Config 是服务的全部运行配置。
 type Config struct {
-	Addr    string
-	EnvFile string
-	Model   ModelConfig
-	Amap    AmapConfig
+	Addr            string
+	EnvFile         string
+	FrontendDistDir string
+	Model           ModelConfig
+	Amap            AmapConfig
 }
 
 // AmapConfig 是高德 Web 服务的配置。
@@ -79,8 +80,9 @@ func Load() Config {
 	envFile := LoadDefaultEnvFile()
 
 	return Config{
-		Addr:    getenv("SERVER_ADDR", ":8080"),
-		EnvFile: envFile,
+		Addr:            getenv("SERVER_ADDR", ":8080"),
+		EnvFile:         envFile,
+		FrontendDistDir: strings.TrimSpace(os.Getenv("FRONTEND_DIST_DIR")),
 		Amap: AmapConfig{
 			APIKey:  os.Getenv("AMAP_KEY"),
 			BaseURL: getenv("AMAP_DIRECTION_URL", "https://restapi.amap.com/v3/direction/driving"),

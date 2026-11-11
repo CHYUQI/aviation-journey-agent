@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: aviation-journey-agent
+    runtime: go
+    plan: free
+    branch: main
+    autoDeployTrigger: checksPass
+    buildCommand: >-
+      npm --prefix frontend ci &&
+      npm --prefix frontend run build -- --outDir ../backend/bin/frontend --emptyOutDir &&
+      cd backend && go build -o ./bin/server ./cmd/server
+    startCommand: SERVER_ADDR="0.0.0.0:${PORT:-10000}" ./backend/bin/server
+    healthCheckPath: /
+    envVars:
+      - key: FRONTEND_DIST_DIR
+        value: backend/bin/frontend

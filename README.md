@@ -47,6 +47,24 @@ npm run dev                  # :5173，/api 代理到 :8080
 
 没有 API key 也能启动：Agent 会走降级路径，返回 `risk = unknown` 并在依据里说明原因。
 
+## 部署到 Render Free
+
+一个 Render Web Service 提供 Vue 页面、`/api/v1` 和 SSE，共用一个 HTTPS 地址。Render 构建时从源码编译 Vue 和 Go。GitHub Actions 在 PR 和 `main` 上检查 Go 构建、`go vet`、Go 测试、契约类型与 Vue 构建。
+
+1. 在 Render 选择 **New Web Service**，通过 GitHub 连接此仓库。分支选 `main`，语言选 **Go**，实例选 **Free**，**Root Directory** 留空。
+2. 将下方两行分别填入 **Build Command** 和 **Start Command**。
+
+   ```bash
+   npm --prefix frontend ci && npm --prefix frontend run build -- --outDir ../backend/bin/frontend --emptyOutDir && cd backend && go build -o ./bin/server ./cmd/server
+   SERVER_ADDR="0.0.0.0:${PORT:-10000}" ./backend/bin/server
+   ```
+
+3. 在 **Environment** 中设置 `FRONTEND_DIST_DIR` 为 `backend/bin/frontend`。如需启用模型，再按 `backend/.env.example` 设置 `MODEL_BASE_URL`、`MODEL_API_KEY`、`MODEL_NAME`。在高级设置中将 **Health Check Path** 设为 `/`。
+4. 创建服务后，在 **Settings → Auto-Deploy** 选择 **After CI Checks Pass**。以后推送到 `main`，Render 会在 GitHub CI 通过后自动发布前后端。
+5. 首次部署完成后，打开 Render 提供的 `onrender.com` 地址。创建行程后，可在浏览器网络面板确认 `/api/v1/journey` 返回 `202`，以及 `/stream` 收到 `snapshot` 和 `heartbeat`。
+
+Render Free 空闲 15 分钟后会休眠，唤醒时首页通常要等约一分钟。行程快照保存在内存，休眠、重启或重新部署后需要重新创建行程。模型调用费用取决于配置的模型服务。 [Render 免费实例说明](https://render.com/docs/free)
+
 ## 接口契约
 
 前后端并行开发以契约为准，不要互相读代码：

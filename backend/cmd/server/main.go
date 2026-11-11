@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -50,6 +52,18 @@ func main() {
 
 	router := gin.Default()
 	api.RegisterRoutes(router, journeyRuntime)
+	if cfg.FrontendDistDir != "" {
+		index := filepath.Join(cfg.FrontendDistDir, "index.html")
+		info, err := os.Stat(index)
+		if err != nil {
+			log.Fatalf("读取前端入口失败：%v", err)
+		}
+		if !info.Mode().IsRegular() {
+			log.Fatalf("前端入口不是文件：%s", index)
+		}
+		router.StaticFile("/", index)
+		router.Static("/assets", filepath.Join(cfg.FrontendDistDir, "assets"))
+	}
 
 	log.Printf("aviation-journey-agent backend listening on %s", cfg.Addr)
 	if err := router.Run(cfg.Addr); err != nil {
