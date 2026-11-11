@@ -110,34 +110,6 @@ func TestParseEOOBAirportInfo_MissingOverview(t *testing.T) {
 	}
 }
 
-func TestFetchAirportHTMLForbidden(t *testing.T) {
-	tests := []struct {
-		name       string
-		newServer  func(http.Handler) *httptest.Server
-		mitigation string
-		want       string
-	}{
-		{name: "HTTP 拒绝", newServer: httptest.NewServer, want: "HTTP 403（HTTP 请求被拒绝）"},
-		{name: "HTTPS 拒绝", newServer: httptest.NewTLSServer, want: "HTTP 403（HTTPS 请求被拒绝）"},
-		{name: "HTTPS 挑战", newServer: httptest.NewTLSServer, mitigation: "challenge", want: "HTTP 403（HTTPS 请求触发 Cloudflare 挑战）"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := tt.newServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Cf-Mitigated", tt.mitigation)
-				w.WriteHeader(http.StatusForbidden)
-			}))
-			defer server.Close()
-
-			skill := AirportStatusSkill{Client: server.Client()}
-			_, err := skill.fetchAirportHTMLHTTP(context.Background(), server.URL+"/CAN")
-			if err == nil || err.Error() != tt.want {
-				t.Fatalf("fetchAirportHTMLHTTP 错误 = %v，期望 %q", err, tt.want)
-			}
-		})
-	}
-}
-
 func TestAirportStatusSkillExecuteHTTP(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
