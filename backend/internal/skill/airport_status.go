@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -253,6 +254,24 @@ func (s AirportStatusSkill) fetchAirportHTMLHTTP(ctx context.Context, pageURL st
 		return "", err
 	}
 	defer resp.Body.Close()
+
+	mitigation := resp.Header.Get("Cf-Mitigated")
+	if resp.StatusCode == http.StatusForbidden {
+		protocol := "HTTP"
+		if resp.TLS != nil {
+			protocol = "HTTPS"
+		}
+		log.Printf("[eoob] 机场页 %s protocol=%s status=%d server=%q cf-mitigated=%q cf-error-type=%q cf-ray=%q",
+			req.URL.EscapedPath(), protocol, resp.StatusCode, resp.Header.Get("Server"), mitigation,
+			resp.Header.Get("Cf-Error-Type"), resp.Header.Get("Cf-Ray"))
+		if mitigation == "challenge" {
+			return "", fmt.Errorf("HTTP 403（%s 请求触发 Cloudflare 挑战）", protocol)
+		}
+		return "", fmt.Errorf("HTTP 403（%s 请求被拒绝）", protocol)
+	}
+	if mitigation == "challenge" {
+		return "", errors.New("被 Cloudflare 挑战页拦截")
+	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, eoobAirportMaxHTMLSize))
 	if err != nil {
