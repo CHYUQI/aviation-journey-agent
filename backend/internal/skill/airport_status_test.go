@@ -56,6 +56,8 @@ const eoobAirportFixture = `<!DOCTYPE html>
 </body>
 </html>`
 
+const eoobDelayFixture = `{"delayindex_observations":100,"delayindex_datestart":"2026-09-14 01:00:00","delayindex_dateend":"2026-09-14 04:00:00","delayindex_flights":100,"onTime":90,"delayed15":8,"delayed30":2,"delayed45":0,"canceled":0}`
+
 func hourlySeats(value int) map[string]int {
 	result := make(map[string]int, 24)
 	for hour := 0; hour < 24; hour++ {
@@ -146,7 +148,7 @@ func TestAirportStatusSkillExecuteHTTP(t *testing.T) {
 			_, _ = w.Write([]byte(airportFixtureWithTraffic(t)))
 		case "/api/delaybox/CAN":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"delayindex_observations":100,"delayindex_datestart":"2026-09-14 01:00:00","delayindex_dateend":"2026-09-14 04:00:00","delayindex_flights":100,"onTime":90,"delayed15":8,"delayed30":2,"delayed45":0,"canceled":0}`))
+			_, _ = w.Write([]byte(eoobDelayFixture))
 		default:
 			http.NotFound(w, r)
 		}
@@ -183,6 +185,39 @@ func TestAirportStatusSkillExecuteHTTP(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("guide 缺少 %q:\n%s", want, joined)
 		}
+	}
+}
+
+func TestAirportStatusSkillKeepsDelayWhenPageIsChallenged(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/TSN":
+			w.Header().Set("Cf-Mitigated", "challenge")
+			w.WriteHeader(http.StatusForbidden)
+		case "/api/delaybox/TSN":
+			_, _ = w.Write([]byte(eoobDelayFixture))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	skill := AirportStatusSkill{Client: server.Client(), BaseURL: server.URL}
+	result, err := skill.Execute(context.Background(), Query{Journey: domain.Journey{
+		Flights: []domain.Flight{{From: "TSN"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Issues) != 1 || !strings.Contains(result.Issues[0], "HTTPS 请求触发 Cloudflare 挑战") {
+		t.Fatalf("机场页取数问题未保留：%v", result.Issues)
+	}
+	if len(result.Observations) != 1 || result.Observations[0].Source != EOOBAirportDelaySource {
+		t.Fatalf("独立延误数据未保留：%+v", result.Observations)
+	}
+	guide, ok := result.Observations[0].Value.([]string)
+	if !ok || len(guide) != 2 || !strings.Contains(guide[0], "最近统计窗口") {
+		t.Fatalf("延误统计或限定词缺失：%v", result.Observations[0].Value)
 	}
 }
 

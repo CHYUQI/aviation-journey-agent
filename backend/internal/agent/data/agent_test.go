@@ -8,6 +8,20 @@ import (
 	"aviation-journey-agent/backend/internal/skill"
 )
 
+func TestAssessQualityWithOnlyAirportDelay(t *testing.T) {
+	gate := "A2"
+	state := domain.State{
+		FlightStatus: domain.FlightStatusOnTime,
+		Gate:         &gate,
+		Timeline:     []domain.TimelineNode{{Time: "2026-09-15T10:00:00+08:00"}},
+		Guide:        []string{"机场延误情况（最近统计窗口）"},
+	}
+	observations := []skill.Observation{{Field: skill.FieldAirportGuide, Source: skill.EOOBAirportDelaySource}}
+	if quality := assessQuality(state, false, observations); quality != domain.QualityDegraded {
+		t.Fatalf("机场仅有延误统计时 quality = %q，期望 %q", quality, domain.QualityDegraded)
+	}
+}
+
 // fakeFlightSkill 同时给出航班状态和到机场耗时，用来验证"已起飞就不再算路程"。
 type fakeFlightSkill struct{ status string }
 

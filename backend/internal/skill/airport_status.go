@@ -21,6 +21,8 @@ const (
 	eoobAirportHTTPTimeout = 20 * time.Second
 	eoobAirportMaxHTMLSize = 2 << 20
 	eoobAirportMaxJSONSize = 1 << 20
+	// EOOBAirportDelaySource identifies a guide with delay statistics alone.
+	EOOBAirportDelaySource = "EOOB 机场延误接口"
 	// eoobChromeVersion 是 UA 与 Sec-CH-UA 共用的 Chromium 主版本，两者必须同源。
 	// 取装机 Edge/Chrome 的主版本（当前 153）；升级浏览器时只改这一处。
 	eoobChromeVersion = "153"
@@ -71,15 +73,43 @@ func (s AirportStatusSkill) Execute(ctx context.Context, query Query) (Result, e
 		return Result{Issues: []string{fmt.Sprintf("出发机场代码 %q 不是三字码，无法查询机场信息", iata)}}, nil
 	}
 
+	lines, issues := s.fetchAirportGuide(ctx, iata)
+	source := "EOOB 机场页"
+	if delay, delayErr := s.fetchEOOBDelay(ctx, iata); delayErr != nil {
+		issues = append(issues, "EOOB 机场延误数据获取失败："+delayErr.Error())
+	} else {
+		source = "EOOB 机场页/延误接口"
+		if len(lines) == 0 {
+			source = EOOBAirportDelaySource
+		}
+		lines = append(lines, formatEOOBDelayInfo(*delay)...)
+	}
+	if len(lines) == 0 {
+		return Result{Issues: issues}, nil
+	}
+
+	return Result{
+		Observations: []Observation{{
+			Field:      FieldAirportGuide,
+			Value:      lines,
+			Source:     source,
+			ObservedAt: time.Now().Format(time.RFC3339),
+			Confidence: "high",
+		}},
+		Issues: issues,
+	}, nil
+}
+
+func (s AirportStatusSkill) fetchAirportGuide(ctx context.Context, iata string) ([]string, []string) {
 	pageURL := s.baseURL() + "/" + iata
 	rawHTML, err := s.fetchAirportHTMLHTTP(ctx, pageURL)
 	if err != nil {
-		return Result{Issues: []string{fmt.Sprintf("EOOB 机场页查询失败：%v", err)}}, nil
+		return nil, []string{fmt.Sprintf("EOOB 机场页查询失败：%v", err)}
 	}
 
 	overview, err := parseEOOBAirportOverview(rawHTML)
 	if err != nil {
-		return Result{Issues: []string{fmt.Sprintf("解析 EOOB 机场页失败：%v", err)}}, nil
+		return nil, []string{fmt.Sprintf("解析 EOOB 机场页失败：%v", err)}
 	}
 	if timezone := strings.TrimSpace(overview["时区"]); timezone != "" {
 		cacheEOOBAirportTimezone(iata, timezone)
@@ -97,22 +127,7 @@ func (s AirportStatusSkill) Execute(ctx context.Context, query Query) (Result, e
 		lines = append(lines, traffic...)
 	}
 
-	if delay, delayErr := s.fetchEOOBDelay(ctx, iata); delayErr != nil {
-		issues = append(issues, "EOOB 机场延误数据获取失败："+delayErr.Error())
-	} else {
-		lines = append(lines, formatEOOBDelayInfo(*delay)...)
-	}
-
-	return Result{
-		Observations: []Observation{{
-			Field:      FieldAirportGuide,
-			Value:      lines,
-			Source:     "EOOB 机场页/延误接口",
-			ObservedAt: time.Now().Format(time.RFC3339),
-			Confidence: "high",
-		}},
-		Issues: issues,
-	}, nil
+	return lines, issues
 }
 
 func validAirportIATA(code string) bool {
@@ -255,32 +270,14 @@ func (s AirportStatusSkill) fetchAirportHTMLHTTP(ctx context.Context, pageURL st
 	}
 	defer resp.Body.Close()
 
-	mitigation := resp.Header.Get("Cf-Mitigated")
-	if resp.StatusCode == http.StatusForbidden {
-		protocol := "HTTP"
-		if resp.TLS != nil {
-			protocol = "HTTPS"
-		}
-		log.Printf("[eoob] 机场页 %s protocol=%s status=%d server=%q cf-mitigated=%q cf-error-type=%q cf-ray=%q",
-			req.URL.EscapedPath(), protocol, resp.StatusCode, resp.Header.Get("Server"), mitigation,
-			resp.Header.Get("Cf-Error-Type"), resp.Header.Get("Cf-Ray"))
-		if mitigation == "challenge" {
-			return "", fmt.Errorf("HTTP 403（%s 请求触发 Cloudflare 挑战）", protocol)
-		}
-		return "", fmt.Errorf("HTTP 403（%s 请求被拒绝）", protocol)
-	}
-	if mitigation == "challenge" {
-		return "", errors.New("被 Cloudflare 挑战页拦截")
+	if err := eoobAirportHTTPError(resp, req.URL.EscapedPath()); err != nil {
+		return "", err
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, eoobAirportMaxHTMLSize))
 	if err != nil {
 		return "", err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-
 	text := string(body)
 	if isCloudflareChallenge(text) {
 		return "", errors.New("被 Cloudflare 挑战页拦截")
@@ -321,17 +318,41 @@ func (s AirportStatusSkill) fetchEOOBDelayHTTP(ctx context.Context, apiURL strin
 	}
 	defer resp.Body.Close()
 
+	if err := eoobAirportHTTPError(resp, req.URL.EscapedPath()); err != nil {
+		return nil, err
+	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, eoobAirportMaxJSONSize))
 	if err != nil {
 		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	if isCloudflareChallenge(string(body)) {
 		return nil, errors.New("被 Cloudflare 挑战页拦截")
 	}
 	return body, nil
+}
+
+func eoobAirportHTTPError(resp *http.Response, path string) error {
+	mitigation := resp.Header.Get("Cf-Mitigated")
+	if resp.StatusCode == http.StatusForbidden {
+		protocol := "HTTP"
+		if resp.TLS != nil {
+			protocol = "HTTPS"
+		}
+		log.Printf("[eoob] %s protocol=%s status=%d server=%q cf-mitigated=%q cf-error-type=%q cf-ray=%q",
+			path, protocol, resp.StatusCode, resp.Header.Get("Server"), mitigation,
+			resp.Header.Get("Cf-Error-Type"), resp.Header.Get("Cf-Ray"))
+		if mitigation == "challenge" {
+			return fmt.Errorf("HTTP 403（%s 请求触发 Cloudflare 挑战）", protocol)
+		}
+		return fmt.Errorf("HTTP 403（%s 请求被拒绝）", protocol)
+	}
+	if mitigation == "challenge" {
+		return errors.New("被 Cloudflare 挑战页拦截")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // eoobRequestKind 区分浏览器会发出的两类请求：地址栏导航与页面内 XHR。

@@ -80,7 +80,7 @@ func (a *Agent) BuildState(ctx context.Context, in Input) (Result, error) {
 		result.Issues = append(result.Issues, "航班已起飞或取消，到机场的路程时间不再有意义，已忽略")
 	}
 
-	state.Quality = assessQuality(state, etaRequired(in.Progress))
+	state.Quality = assessQuality(state, etaRequired(in.Progress), queryResult.Observations)
 
 	result.State = state
 	return result, nil
@@ -248,7 +248,7 @@ func nonEmptyLines(lines []string) []string {
 //
 // 缺任何一项都会降为 degraded；航班状态和时间轴都没有时是 unknown。
 // 不编造数据，也不把"未知"算成完整。
-func assessQuality(state domain.State, etaRequired bool) string {
+func assessQuality(state domain.State, etaRequired bool, observations []skill.Observation) string {
 	hasFlight := state.FlightStatus != domain.FlightStatusUnknown
 	hasTimeline := len(state.Timeline) > 0
 
@@ -260,6 +260,11 @@ func assessQuality(state domain.State, etaRequired bool) string {
 	}
 	if len(state.Guide) == 0 {
 		return domain.QualityDegraded
+	}
+	for _, obs := range observations {
+		if obs.Field == skill.FieldAirportGuide && obs.Source == skill.EOOBAirportDelaySource {
+			return domain.QualityDegraded
+		}
 	}
 	if state.Gate == nil {
 		return domain.QualityDegraded
